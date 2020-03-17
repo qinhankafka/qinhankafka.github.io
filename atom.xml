@@ -6,7 +6,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://kafkablogs.com/"/>
-  <updated>2020-03-01T10:36:10.955Z</updated>
+  <updated>2020-03-17T15:49:08.082Z</updated>
   <id>http://kafkablogs.com/</id>
   
   <author>
@@ -17,11 +17,11 @@
   <generator uri="https://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>2020年三月</title>
-    <link href="http://kafkablogs.com/2020/03/01/2020%E5%B9%B4%E4%B8%89%E6%9C%88/"/>
-    <id>http://kafkablogs.com/2020/03/01/2020%E5%B9%B4%E4%B8%89%E6%9C%88/</id>
-    <published>2020-03-01T10:03:40.000Z</published>
-    <updated>2020-03-01T10:36:10.955Z</updated>
+    <title>关于武汉的记忆</title>
+    <link href="http://kafkablogs.com/2020/03/17/%E5%85%B3%E4%BA%8E%E6%AD%A6%E6%B1%89%E7%9A%84%E8%AE%B0%E5%BF%86/"/>
+    <id>http://kafkablogs.com/2020/03/17/%E5%85%B3%E4%BA%8E%E6%AD%A6%E6%B1%89%E7%9A%84%E8%AE%B0%E5%BF%86/</id>
+    <published>2020-03-17T13:22:12.000Z</published>
+    <updated>2020-03-17T15:49:08.082Z</updated>
     
     <summary type="html">
     
@@ -29,8 +29,8 @@
       
         
         
-          &lt;p&gt;2020年过去了1/6，很多事情陷入停滞的状态&lt;/p&gt;
-
+          &lt;p&gt;​    算一下离开学校已经有两个月了，这可能是我人生中最漫长的寒假了。2020年，世界变得一团糟，肺炎，熔断，举报成风…让我有一些不知所措，无心干任何事情。愤怒和悲凉是这段时间来的最主要的感受，关于一切。&lt;/p&gt;
+&lt;p&gt;​   
         
       
     
@@ -39,69 +39,6 @@
     
     
       <category term="随笔" scheme="http://kafkablogs.com/tags/%E9%9A%8F%E7%AC%94/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>double computer test</title>
-    <link href="http://kafkablogs.com/2020/03/01/double-computer-test/"/>
-    <id>http://kafkablogs.com/2020/03/01/double-computer-test/</id>
-    <published>2020-03-01T09:48:55.000Z</published>
-    <updated>2020-03-01T09:48:55.410Z</updated>
-    
-    <summary type="html">
-    
-    </summary>
-    
-    
-    
-  </entry>
-  
-  <entry>
-    <title>test-blog</title>
-    <link href="http://kafkablogs.com/2020/03/01/test-blog/"/>
-    <id>http://kafkablogs.com/2020/03/01/test-blog/</id>
-    <published>2020-03-01T07:10:52.000Z</published>
-    <updated>2020-03-01T07:20:28.862Z</updated>
-    
-    <summary type="html">
-    
-      
-      
-        
-        
-          &lt;p&gt;welcome to my blog！&lt;/p&gt;
-&lt;p&gt;this is my test blog！&lt;/p&gt;
-&lt;p&gt;have
-        
-      
-    
-    </summary>
-    
-    
-    
-  </entry>
-  
-  <entry>
-    <title>Hello World</title>
-    <link href="http://kafkablogs.com/2020/02/29/hello-world/"/>
-    <id>http://kafkablogs.com/2020/02/29/hello-world/</id>
-    <published>2020-02-29T05:56:09.805Z</published>
-    <updated>2020-02-29T05:56:09.805Z</updated>
-    
-    <summary type="html">
-    
-      
-      
-        
-        
-          &lt;p&gt;Welcome to &lt;a href=&quot;https://hexo.io/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;Hexo&lt;/a&gt;! This is your very first post. Check &lt;a
-        
-      
-    
-    </summary>
-    
-    
     
   </entry>
   
