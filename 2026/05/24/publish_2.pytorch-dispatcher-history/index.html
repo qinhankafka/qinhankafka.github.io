@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch dispatcher history | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 调度器：历史视角下的设计与演变引言：为什么需要调度器？当你执行这行代码时： 1result &#x3D; torch.add(a, b)  你有没有想过，这个简单的操作背后，PyTorch 是如何找到正确的实现代码的？ a 和 b 可能是 CPU 张量，也可能是 GPU 张量；可能是 float 类型，也可能是 int 类型；可能是稠密张量，也可能是稀疏张量。每一种组合都可能有不同的优化实现">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch dispatcher history">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_2.pytorch-dispatcher-history/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 调度器：历史视角下的设计与演变引言：为什么需要调度器？当你执行这行代码时： 1result &#x3D; torch.add(a, b)  你有没有想过，这个简单的操作背后，PyTorch 是如何找到正确的实现代码的？ a 和 b 可能是 CPU 张量，也可能是 GPU 张量；可能是 float 类型，也可能是 int 类型；可能是稠密张量，也可能是稀疏张量。每一种组合都可能有不同的优化实现">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.180Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch dispatcher history
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E8%B0%83%E5%BA%A6%E5%99%A8%EF%BC%9F"><span class="toc-text">引言：为什么需要调度器？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E7%AB%A0%EF%BC%9A%E8%B5%B7%E6%BA%90%E2%80%94%E2%80%94TH-%E5%BA%93%E5%92%8C-Lua-Torch-%E6%97%B6%E4%BB%A3"><span class="toc-text">第一章：起源——TH 库和 Lua Torch 时代</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-%E6%97%B6%E4%BB%A3%E7%9A%84%E5%BC%A0%E9%87%8F%E5%BA%93"><span class="toc-text">C 时代的张量库</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E7%AB%A0%EF%BC%9A%E8%BF%87%E6%B8%A1%E5%88%B0-C-%E5%92%8C-A10-%E7%9A%84%E8%AF%9E%E7%94%9F"><span class="toc-text">第二章：过渡到 C++ 和 A10 的诞生</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E9%97%AE%E9%A2%98"><span class="toc-text">性能问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Zachary-DeVito-%E7%9A%84%E7%AA%81%E7%A0%B4"><span class="toc-text">Zachary DeVito 的突破</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E5%88%86%E6%B4%BE%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-text">虚拟分派的设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%99%E4%B8%AA%E8%AE%BE%E8%AE%A1%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">这个设计的优势</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E7%AB%A0%EF%BC%9A%E8%99%9A%E6%8B%9F%E5%88%86%E6%B4%BE%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">第三章：虚拟分派的问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-1%EF%BC%9Avtable-%E6%97%A0%E6%B3%95%E6%89%A9%E5%B1%95"><span class="toc-text">问题 1：vtable 无法扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-2%EF%BC%9A%E5%A4%9A%E8%B4%A1%E7%8C%AE%E8%80%85%E5%8D%8F%E4%BD%9C%E5%9B%B0%E9%9A%BE"><span class="toc-text">问题 2：多贡献者协作困难</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-3%EF%BC%9Aautograd-%E7%9A%84%E7%89%B9%E6%AE%8A%E8%A6%81%E6%B1%82"><span class="toc-text">问题 3：autograd 的特殊要求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-4%EF%BC%9A%E5%A4%9A%E9%87%8D%E5%88%86%E6%B4%BE%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-text">问题 4：多重分派的需求</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E7%AB%A0%EF%BC%9A%E7%8E%B0%E4%BB%A3%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-text">第四章：现代调度器的设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3%EF%BC%9A%E8%87%AA%E5%B7%B1%E5%AE%9E%E7%8E%B0%E5%88%86%E6%B4%BE%E6%9C%BA%E5%88%B6"><span class="toc-text">核心思想：自己实现分派机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%EF%BC%9A%E6%AF%8F%E4%B8%AA%E6%93%8D%E4%BD%9C%E7%AC%A6%E7%8B%AC%E7%AB%8B%E7%9A%84%E8%B0%83%E5%BA%A6%E8%A1%A8"><span class="toc-text">关键设计：每个操作符独立的调度表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E7%B3%BB%E7%BB%9F"><span class="toc-text">DispatchKey 系统</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E9%87%8D%E5%88%86%E6%B4%BE%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">多重分派的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%EF%BC%9A%E7%A8%A0%E5%AF%86%E5%BC%A0%E9%87%8F-%E7%A8%80%E7%96%8F%E5%BC%A0%E9%87%8F"><span class="toc-text">场景：稠密张量 + 稀疏张量</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-text">源码实现</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%90%88%E5%B9%B6%E8%A7%84%E5%88%99%EF%BC%9A%E4%BD%8D%E8%BF%90%E7%AE%97-OR"><span class="toc-text">合并规则：位运算 OR</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%98%E5%85%88%E7%BA%A7%E6%8E%92%E5%BA%8F%EF%BC%9A%E5%8A%9F%E8%83%BD%E9%94%AE-%E5%90%8E%E7%AB%AF%E9%94%AE"><span class="toc-text">优先级排序：功能键 &gt; 后端键</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%89%E4%B8%AA%E5%87%BD%E6%95%B0%E7%9A%84%E9%80%BB%E8%BE%91%E8%A7%A3%E6%9E%90"><span class="toc-text">三个函数的逻辑解析</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1%EF%BC%9F"><span class="toc-text">为什么这样设计？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%88%86%E6%B4%BE%E8%A1%A8%E6%9F%A5%E6%89%BE"><span class="toc-text">分派表查找</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%88%86%E6%B4%BE%E8%A1%A8%E6%9F%A5%E6%89%BE%E7%9A%84-fallback-%E6%9C%BA%E5%88%B6"><span class="toc-text">分派表查找的 fallback 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%9B%9B%E5%B1%82-fallback-%E7%AD%96%E7%95%A5"><span class="toc-text">四层 fallback 策略</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Backend-Fallback-%E7%9A%84%E7%94%A8%E9%80%94"><span class="toc-text">Backend Fallback 的用途</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Catch-all-Kernel-vs-Backend-Fallback"><span class="toc-text">Catch-all Kernel vs Backend Fallback</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%94%E7%AB%A0%EF%BC%9A%E5%BC%80%E6%94%BE%E6%B3%A8%E5%86%8C%E7%B3%BB%E7%BB%9F"><span class="toc-text">第五章：开放注册系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E5%86%8C%E6%93%8D%E4%BD%9C%E7%AC%A6"><span class="toc-text">注册操作符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A8%E6%80%81%E5%BA%93%E5%8A%A0%E8%BD%BD"><span class="toc-text">动态库加载</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%85%AD%E7%AB%A0%EF%BC%9A%E8%87%AA%E5%8A%A8%E8%A3%85%E7%AE%B1%EF%BC%88Automatic-Boxing%EF%BC%89"><span class="toc-text">第六章：自动装箱（Automatic Boxing）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E8%83%8C%E6%99%AF"><span class="toc-text">问题背景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sebastian-Messmer-%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">Sebastian Messmer 的工作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%83%E7%AB%A0%EF%BC%9A%E5%8E%86%E5%8F%B2%E7%BA%A6%E6%9D%9F%E4%B8%8E%E8%AE%BE%E8%AE%A1%E6%9D%83%E8%A1%A1"><span class="toc-text">第七章：历史约束与设计权衡</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-%E5%92%8C-CUDA-%E5%88%86%E7%A6%BB%E5%88%B0%E4%B8%8D%E5%90%8C%E5%BA%93"><span class="toc-text">CPU 和 CUDA 分离到不同库</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E6%94%BE%E6%B3%A8%E5%86%8C%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-text">开放注册的需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD-vs-%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7"><span class="toc-text">性能 vs 可扩展性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93%EF%BC%9A%E7%90%86%E8%A7%A3%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E6%BC%94%E8%BF%9B"><span class="toc-text">总结：理解调度器的演进</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E8%B0%83%E5%BA%A6%E5%99%A8%EF%BC%9F"><span class="toc-text">引言：为什么需要调度器？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E7%AB%A0%EF%BC%9A%E8%B5%B7%E6%BA%90%E2%80%94%E2%80%94TH-%E5%BA%93%E5%92%8C-Lua-Torch-%E6%97%B6%E4%BB%A3"><span class="toc-text">第一章：起源——TH 库和 Lua Torch 时代</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-%E6%97%B6%E4%BB%A3%E7%9A%84%E5%BC%A0%E9%87%8F%E5%BA%93"><span class="toc-text">C 时代的张量库</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E7%AB%A0%EF%BC%9A%E8%BF%87%E6%B8%A1%E5%88%B0-C-%E5%92%8C-A10-%E7%9A%84%E8%AF%9E%E7%94%9F"><span class="toc-text">第二章：过渡到 C++ 和 A10 的诞生</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E9%97%AE%E9%A2%98"><span class="toc-text">性能问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Zachary-DeVito-%E7%9A%84%E7%AA%81%E7%A0%B4"><span class="toc-text">Zachary DeVito 的突破</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E5%88%86%E6%B4%BE%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-text">虚拟分派的设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%99%E4%B8%AA%E8%AE%BE%E8%AE%A1%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">这个设计的优势</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E7%AB%A0%EF%BC%9A%E8%99%9A%E6%8B%9F%E5%88%86%E6%B4%BE%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">第三章：虚拟分派的问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-1%EF%BC%9Avtable-%E6%97%A0%E6%B3%95%E6%89%A9%E5%B1%95"><span class="toc-text">问题 1：vtable 无法扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-2%EF%BC%9A%E5%A4%9A%E8%B4%A1%E7%8C%AE%E8%80%85%E5%8D%8F%E4%BD%9C%E5%9B%B0%E9%9A%BE"><span class="toc-text">问题 2：多贡献者协作困难</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-3%EF%BC%9Aautograd-%E7%9A%84%E7%89%B9%E6%AE%8A%E8%A6%81%E6%B1%82"><span class="toc-text">问题 3：autograd 的特殊要求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-4%EF%BC%9A%E5%A4%9A%E9%87%8D%E5%88%86%E6%B4%BE%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-text">问题 4：多重分派的需求</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E7%AB%A0%EF%BC%9A%E7%8E%B0%E4%BB%A3%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-text">第四章：现代调度器的设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3%EF%BC%9A%E8%87%AA%E5%B7%B1%E5%AE%9E%E7%8E%B0%E5%88%86%E6%B4%BE%E6%9C%BA%E5%88%B6"><span class="toc-text">核心思想：自己实现分派机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%EF%BC%9A%E6%AF%8F%E4%B8%AA%E6%93%8D%E4%BD%9C%E7%AC%A6%E7%8B%AC%E7%AB%8B%E7%9A%84%E8%B0%83%E5%BA%A6%E8%A1%A8"><span class="toc-text">关键设计：每个操作符独立的调度表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E7%B3%BB%E7%BB%9F"><span class="toc-text">DispatchKey 系统</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E9%87%8D%E5%88%86%E6%B4%BE%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">多重分派的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%EF%BC%9A%E7%A8%A0%E5%AF%86%E5%BC%A0%E9%87%8F-%E7%A8%80%E7%96%8F%E5%BC%A0%E9%87%8F"><span class="toc-text">场景：稠密张量 + 稀疏张量</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-text">源码实现</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%90%88%E5%B9%B6%E8%A7%84%E5%88%99%EF%BC%9A%E4%BD%8D%E8%BF%90%E7%AE%97-OR"><span class="toc-text">合并规则：位运算 OR</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%98%E5%85%88%E7%BA%A7%E6%8E%92%E5%BA%8F%EF%BC%9A%E5%8A%9F%E8%83%BD%E9%94%AE-%E5%90%8E%E7%AB%AF%E9%94%AE"><span class="toc-text">优先级排序：功能键 &gt; 后端键</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%89%E4%B8%AA%E5%87%BD%E6%95%B0%E7%9A%84%E9%80%BB%E8%BE%91%E8%A7%A3%E6%9E%90"><span class="toc-text">三个函数的逻辑解析</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1%EF%BC%9F"><span class="toc-text">为什么这样设计？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%88%86%E6%B4%BE%E8%A1%A8%E6%9F%A5%E6%89%BE"><span class="toc-text">分派表查找</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%88%86%E6%B4%BE%E8%A1%A8%E6%9F%A5%E6%89%BE%E7%9A%84-fallback-%E6%9C%BA%E5%88%B6"><span class="toc-text">分派表查找的 fallback 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%9B%9B%E5%B1%82-fallback-%E7%AD%96%E7%95%A5"><span class="toc-text">四层 fallback 策略</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Backend-Fallback-%E7%9A%84%E7%94%A8%E9%80%94"><span class="toc-text">Backend Fallback 的用途</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Catch-all-Kernel-vs-Backend-Fallback"><span class="toc-text">Catch-all Kernel vs Backend Fallback</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%94%E7%AB%A0%EF%BC%9A%E5%BC%80%E6%94%BE%E6%B3%A8%E5%86%8C%E7%B3%BB%E7%BB%9F"><span class="toc-text">第五章：开放注册系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E5%86%8C%E6%93%8D%E4%BD%9C%E7%AC%A6"><span class="toc-text">注册操作符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A8%E6%80%81%E5%BA%93%E5%8A%A0%E8%BD%BD"><span class="toc-text">动态库加载</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%85%AD%E7%AB%A0%EF%BC%9A%E8%87%AA%E5%8A%A8%E8%A3%85%E7%AE%B1%EF%BC%88Automatic-Boxing%EF%BC%89"><span class="toc-text">第六章：自动装箱（Automatic Boxing）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E8%83%8C%E6%99%AF"><span class="toc-text">问题背景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sebastian-Messmer-%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">Sebastian Messmer 的工作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%83%E7%AB%A0%EF%BC%9A%E5%8E%86%E5%8F%B2%E7%BA%A6%E6%9D%9F%E4%B8%8E%E8%AE%BE%E8%AE%A1%E6%9D%83%E8%A1%A1"><span class="toc-text">第七章：历史约束与设计权衡</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-%E5%92%8C-CUDA-%E5%88%86%E7%A6%BB%E5%88%B0%E4%B8%8D%E5%90%8C%E5%BA%93"><span class="toc-text">CPU 和 CUDA 分离到不同库</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E6%94%BE%E6%B3%A8%E5%86%8C%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-text">开放注册的需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD-vs-%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7"><span class="toc-text">性能 vs 可扩展性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93%EF%BC%9A%E7%90%86%E8%A7%A3%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E6%BC%94%E8%BF%9B"><span class="toc-text">总结：理解调度器的演进</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-调度器：历史视角下的设计与演变"><a href="#PyTorch-调度器：历史视角下的设计与演变" class="headerlink" title="PyTorch 调度器：历史视角下的设计与演变"></a>PyTorch 调度器：历史视角下的设计与演变</h1><h2 id="引言：为什么需要调度器？"><a href="#引言：为什么需要调度器？" class="headerlink" title="引言：为什么需要调度器？"></a>引言：为什么需要调度器？</h2><p>当你执行这行代码时：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">result = torch.add(a, b)</span><br></pre></td></tr></table></figure>
+
+<p>你有没有想过，这个简单的操作背后，PyTorch 是如何找到正确的实现代码的？</p>
+<p><code>a</code> 和 <code>b</code> 可能是 CPU 张量，也可能是 GPU 张量；可能是 float 类型，也可能是 int 类型；可能是稠密张量，也可能是稀疏张量。每一种组合都可能有不同的优化实现。</p>
+<p><strong>调度器（Dispatcher）</strong> 就是负责解决这个问题的基础设施：给定一个操作（如 <code>add</code>）和输入参数，它能快速定位到应该执行的具体实现。</p>
+<p>理解调度器的历史，有助于理解为什么 PyTorch 的内部架构如此设计，以及为什么某些权衡存在。</p>
+<hr>
+<h2 id="第一章：起源——TH-库和-Lua-Torch-时代"><a href="#第一章：起源——TH-库和-Lua-Torch-时代" class="headerlink" title="第一章：起源——TH 库和 Lua Torch 时代"></a>第一章：起源——TH 库和 Lua Torch 时代</h2><h3 id="C-时代的张量库"><a href="#C-时代的张量库" class="headerlink" title="C 时代的张量库"></a>C 时代的张量库</h3><p>PyTorch 并不是凭空诞生的。它的祖先是 <strong>Lua Torch</strong>，一个用 Lua 语言封装的张量库。Lua Torch 的核心是 <strong>Th 库</strong>（Torch Tensor 库），用 C 语言编写。</p>
+<p>用 C 语言实现张量操作有一个根本性的挑战：<strong>C 没有泛型</strong>。当你需要为 <code>float</code>、<code>double</code>、<code>int32</code>、<code>int64</code> 等不同数据类型实现同一操作时，无法像 C++ 模板那样简单写一次就完事。</p>
+<p>当时的解决方案是<strong>宏生成</strong>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 定义通用操作的宏</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> Tensor_A(op, tensor)  \</span></span><br><span class="line"><span class="meta">    <span class="keyword">if</span> (tensor-&gt;isFloat) THFloatTensor_##op(tensor);  \</span></span><br><span class="line"><span class="meta">    <span class="keyword">else</span> <span class="keyword">if</span> (tensor-&gt;isDouble) THDoubleTensor_##op(tensor);</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> Tensor_A(op, tensor)  \</span></span><br><span class="line"><span class="meta">    switch (tensor-&gt;type) &#123;  \</span></span><br><span class="line"><span class="meta">        case FLOAT: THFloatTensor_##op(tensor); break;  \</span></span><br><span class="line"><span class="meta">        case DOUBLE: THDoubleTensor_##op(tensor); break;  \</span></span><br><span class="line"><span class="meta">        ...</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>每个操作（如 <code>add</code>、<code>mul</code>、<code>sigmoid</code>）都会生成 8 个变体：</p>
+<ul>
+<li><code>THFloatTensor_add</code></li>
+<li><code>THDoubleTensor_add</code></li>
+<li><code>THIntTensor_add</code></li>
+<li><code>THCharTensor_add</code></li>
+<li>…</li>
+</ul>
+<p>在 Python 绑定层面，代码使用 switch 语句检查张量类型，然后调用对应的 C 函数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Python 绑定层面的调度逻辑（简化）</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">add</span>(<span class="params">tensor1, tensor2</span>):</span><br><span class="line">    <span class="keyword">if</span> tensor1.dtype == torch.float32:</span><br><span class="line">        <span class="keyword">return</span> THFloatTensor_add(tensor1, tensor2)</span><br><span class="line">    <span class="keyword">elif</span> tensor1.dtype == torch.float64:</span><br><span class="line">        <span class="keyword">return</span> THDoubleTensor_add(tensor1, tensor2)</span><br><span class="line">    <span class="comment"># ... 更多类型</span></span><br></pre></td></tr></table></figure>
+
+<p>这种模式在当时工作正常，但存在几个问题：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>代码膨胀</strong></td>
+<td>每个操作都需要为每种数据类型生成独立函数</td>
+</tr>
+<tr>
+<td><strong>维护困难</strong></td>
+<td>修改一个操作需要同时修改多个生成的变体</td>
+</tr>
+<tr>
+<td><strong>性能瓶颈</strong></td>
+<td>Python 层的类型检查和函数调用带来额外开销</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第二章：过渡到-C-和-A10-的诞生"><a href="#第二章：过渡到-C-和-A10-的诞生" class="headerlink" title="第二章：过渡到 C++ 和 A10 的诞生"></a>第二章：过渡到 C++ 和 A10 的诞生</h2><h3 id="性能问题"><a href="#性能问题" class="headerlink" title="性能问题"></a>性能问题</h3><p>当 Facebook 团队开始改进 PyTorch 时，Python 层的性能问题变得不可接受。Sam Gross 的测量表明，对 Python 的依赖是主要瓶颈——每次操作都需要从 Python 解释器层穿越到 C 库，再返回。</p>
+<h3 id="Zachary-DeVito-的突破"><a href="#Zachary-DeVito-的突破" class="headerlink" title="Zachary DeVito 的突破"></a>Zachary DeVito 的突破</h3><p>2015 年左右，Zachary DeVito 提出了一个革命性的想法：<strong>用 C++ 重新实现张量库</strong>，并让这个库的接口与 Python 的语义保持一致。</p>
+<p>他花了两个星期完成了这个项目，这就是后来的 <strong>A10 库</strong>——ATen 的前身。</p>
+<h3 id="虚拟分派的设计"><a href="#虚拟分派的设计" class="headerlink" title="虚拟分派的设计"></a>虚拟分派的设计</h3><p>DeVito 没有使用条件语句来选择实现，而是利用了 C++ 的<strong>面向对象能力</strong>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 简化的类型对象设计</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">TensorType</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">add</span><span class="params">(<span class="type">const</span> Tensor&amp; other)</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">sigmoid</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">relu</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// ... 更多操作</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// CPU 实现</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">CPUFloatTensorType</span> : <span class="keyword">public</span> TensorType &#123;</span><br><span class="line">    <span class="function">Tensor <span class="title">add</span><span class="params">(<span class="type">const</span> Tensor&amp; other)</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 使用 SIMD 指令的优化实现</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// CUDA 实现</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">CUDAfloatTensorType</span> : <span class="keyword">public</span> TensorType &#123;</span><br><span class="line">    <span class="function">Tensor <span class="title">add</span><span class="params">(<span class="type">const</span> Tensor&amp; other)</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">        <span class="comment">// GPU 上的并行实现</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>每个 Tensor 对象持有一个指向 <code>TensorType</code> 的指针：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">TensorImpl</span> &#123;</span><br><span class="line">    TensorType* type;  <span class="comment">// 指向类型对象</span></span><br><span class="line">    <span class="comment">// ... 其他数据</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>当调用 <code>tensor.add(other)</code> 时，通过虚函数调用间接寻址到正确的实现：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">tensor.add(other)</span><br><span class="line">    │</span><br><span class="line">    ├── tensor.type 指向 CPUFloatTensorType</span><br><span class="line">    ▼</span><br><span class="line">CPUFloatTensorType::add()</span><br><span class="line">    │</span><br><span class="line">    └── 或 tensor.type 指向 CUDAfloatTensorType</span><br><span class="line">           ▼</span><br><span class="line">        CUDAfloatTensorType::add()</span><br></pre></td></tr></table></figure>
+
+<h3 id="这个设计的优势"><a href="#这个设计的优势" class="headerlink" title="这个设计的优势"></a>这个设计的优势</h3><ol>
+<li><p><strong>Python 语义一致性</strong>：Python 的 <code>torch.Tensor</code> 本身就是引用传递（对象），而不是值传递。A10 设计保持了这一语义，避免了意外的拷贝。</p>
+</li>
+<li><p><strong>模块化 CUDA</strong>：CUDA 支持作为独立的动态库存在，虚调用可以无缝桥接 CPU 和 CUDA 实现。</p>
+</li>
+<li><p><strong>类型安全</strong>：编译时的类型检查减少了运行时错误。</p>
+</li>
+</ol>
+<hr>
+<h2 id="第三章：虚拟分派的问题"><a href="#第三章：虚拟分派的问题" class="headerlink" title="第三章：虚拟分派的问题"></a>第三章：虚拟分派的问题</h2><p>虚拟分派模式在初期运行良好，但随着时间推移，问题逐渐暴露。</p>
+<h3 id="问题-1：vtable-无法扩展"><a href="#问题-1：vtable-无法扩展" class="headerlink" title="问题 1：vtable 无法扩展"></a>问题 1：vtable 无法扩展</h3><p>C++ 的虚函数表（vtable）在类定义时就固定了。如果要添加新操作，必须修改基类，重新编译所有子类。</p>
+<p>PyTorch 的操作符数量庞大（数百个），每个都修改基类是不切实际的：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 每次添加新操作都需要修改基类</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">TensorType</span> &#123;</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">add</span><span class="params">(<span class="type">const</span> Tensor&amp; other)</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">sigmoid</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// 2024 年新增</span></span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">silu</span><span class="params">()</span> </span>= <span class="number">0</span>;        <span class="comment">// SiLU activation</span></span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">mish</span><span class="params">()</span> </span>= <span class="number">0</span>;        <span class="comment">// Mish activation</span></span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> Tensor <span class="title">gelu_approx</span><span class="params">()</span> </span>= <span class="number">0</span>; <span class="comment">// GELU approximation</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="问题-2：多贡献者协作困难"><a href="#问题-2：多贡献者协作困难" class="headerlink" title="问题 2：多贡献者协作困难"></a>问题 2：多贡献者协作困难</h3><p>PyTorch 是一个开源项目，全球有数百名贡献者。如果每个新操作都需要修改核心 <code>TensorType</code> 类，并等待所有后端（CPU、CUDA、XLA 等）都实现，会严重拖慢迭代速度。</p>
+<h3 id="问题-3：autograd-的特殊要求"><a href="#问题-3：autograd-的特殊要求" class="headerlink" title="问题 3：autograd 的特殊要求"></a>问题 3：autograd 的特殊要求</h3><p>PyTorch 的自动求导（autograd）系统需要在操作执行前拦截调用，进行梯度追踪。这意味着 **autograd 本身也是一种”后端”**，需要能够注册自己的处理器。</p>
+<p>vtable 模型无法优雅地支持这种”链式拦截”：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">用户调用 tensor.add()</span><br><span class="line">    │</span><br><span class="line">    ├── Autograd 拦截（记录反向图）</span><br><span class="line">    ├── 调用底层 CPU/CUDA 实现</span><br><span class="line">    └── 返回结果</span><br></pre></td></tr></table></figure>
+
+<h3 id="问题-4：多重分派的需求"><a href="#问题-4：多重分派的需求" class="headerlink" title="问题 4：多重分派的需求"></a>问题 4：多重分派的需求</h3><p>有些操作的实现应该取决于<strong>所有参数类型</strong>，而不仅仅是第一个参数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 密集张量 + 稀疏张量</span></span><br><span class="line">dense_tensor + sparse_tensor</span><br></pre></td></tr></table></figure>
+
+<p>应该调度到 <code>dense_sparse_add</code> 实现，而不是 <code>dense_dense_add</code> 或 <code>sparse_sparse_add</code>。</p>
+<hr>
+<h2 id="第四章：现代调度器的设计"><a href="#第四章：现代调度器的设计" class="headerlink" title="第四章：现代调度器的设计"></a>第四章：现代调度器的设计</h2><h3 id="核心思想：自己实现分派机制"><a href="#核心思想：自己实现分派机制" class="headerlink" title="核心思想：自己实现分派机制"></a>核心思想：自己实现分派机制</h3><p>面对 vtable 的局限性，PyTorch 团队做出了一个关键决策：<strong>不再依赖 C++ 的虚函数分派，而是自己实现分派机制</strong>。</p>
+<p>关键源码位于 <a href="aten/src/ATen/core/dispatch/Dispatcher.h">aten&#x2F;src&#x2F;ATen&#x2F;core&#x2F;dispatch&#x2F;Dispatcher.h</a>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">TORCH_API</span> Dispatcher &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// 注册操作符</span></span><br><span class="line">    <span class="function">OperatorHandle <span class="title">registerOp</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> std::string&amp; name,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> FunctionSchema&amp; schema,</span></span></span><br><span class="line"><span class="params"><span class="function">        KernelFunction* kernelFunc)</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 将新操作符添加到全局表</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 调用操作符</span></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span>... Args&gt;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">call</span><span class="params">(Args&amp;&amp;... args)</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 1. 从参数提取 dispatch key</span></span><br><span class="line">        DispatchKeySet dispatchKeys = <span class="built_in">extractDispatchKeySet</span>(args...);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2. 查找对应的 kernel</span></span><br><span class="line">        KernelFunction* kernel = <span class="built_in">lookup</span>(kernel_func, dispatchKeys);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 3. 调用 kernel</span></span><br><span class="line">        kernel-&gt;<span class="built_in">call</span>(std::forward&lt;Args&gt;(args)...);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="关键设计：每个操作符独立的调度表"><a href="#关键设计：每个操作符独立的调度表" class="headerlink" title="关键设计：每个操作符独立的调度表"></a>关键设计：每个操作符独立的调度表</h3><p>与 vtable 模式不同，调度器为<strong>每个操作符</strong>维护独立的调度表：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// OperatorEntry.h 中的结构</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">OperatorEntry</span> &#123;</span><br><span class="line">    <span class="comment">// 操作符名称</span></span><br><span class="line">    OperatorName name_;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 操作符的具体 kernel 表</span></span><br><span class="line">    <span class="comment">// 索引：DispatchKey -&gt; KernelFunction</span></span><br><span class="line">    std::array&lt;KernelFunction, num_runtime_entries&gt; dispatchTable_;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 所有注册的 kernel（用于多重分派）</span></span><br><span class="line">    ska::flat_hash_map&lt;DispatchKey, std::list&lt;AnnotatedKernel&gt;&gt; kernels_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>调度过程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">调用 torch.add(tensor1, tensor2)</span><br><span class="line">    │</span><br><span class="line">    ▼</span><br><span class="line">Dispatcher::call()</span><br><span class="line">    │</span><br><span class="line">    ├── 从 tensor1 和 tensor2 提取 DispatchKeySet</span><br><span class="line">    │   例如 &#123;DispatchKey::CPU, DispatchKey::Dense&#125;</span><br><span class="line">    │</span><br><span class="line">    ▼</span><br><span class="line">OperatorEntry::lookup(dispatchKeySet)</span><br><span class="line">    │</span><br><span class="line">    └── dispatchTable_[key] 获取 kernel 地址</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">    KernelFunction::call()</span><br></pre></td></tr></table></figure>
+
+<h3 id="DispatchKey-系统"><a href="#DispatchKey-系统" class="headerlink" title="DispatchKey 系统"></a>DispatchKey 系统</h3><p>DispatchKey 是理解现代调度器的核心。在 <a href="c10/core/DispatchKey.h">c10&#x2F;core&#x2F;DispatchKey.h</a> 中定义了所有可能的分派键：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> C10_FORALL_BACKEND_COMPONENTS(_, extra) \</span></span><br><span class="line"><span class="meta">  _(CPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(CUDA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(HIP, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(XLA, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(MPS, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(IPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(XPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(HPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(VE, extra)                                  \</span></span><br><span class="line"><span class="meta">  _(Lazy, extra)                                \</span></span><br><span class="line"><span class="meta">  _(MTIA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(MAIA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(PrivateUse1, extra)                         \</span></span><br><span class="line"><span class="meta">  _(PrivateUse2, extra)                         \</span></span><br><span class="line"><span class="meta">  _(PrivateUse3, extra)                         \</span></span><br><span class="line"><span class="meta">  _(Meta, extra)</span></span><br></pre></td></tr></table></figure>
+
+<p>这些 BackendComponent 形成位标志，可以组合：</p>
+<table>
+<thead>
+<tr>
+<th>组合</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>CPU</code></td>
+<td>CPU 上的稠密张量</td>
+</tr>
+<tr>
+<td><code>CUDA</code></td>
+<td>CUDA GPU 上的稠密张量</td>
+</tr>
+<tr>
+<td><code>SparseCPU</code></td>
+<td>CPU 上的稀疏张量</td>
+</tr>
+<tr>
+<td><code>AutogradCPU</code></td>
+<td>CPU 上的反向传播处理</td>
+</tr>
+</tbody></table>
+<h3 id="多重分派的实现"><a href="#多重分派的实现" class="headerlink" title="多重分派的实现"></a>多重分派的实现</h3><p>多重分派需要考虑<strong>所有参数的类型</strong>，而不仅仅是第一个。让我用具体例子详细解释。</p>
+<h4 id="场景：稠密张量-稀疏张量"><a href="#场景：稠密张量-稀疏张量" class="headerlink" title="场景：稠密张量 + 稀疏张量"></a>场景：稠密张量 + 稀疏张量</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">dense = torch.randn(<span class="number">3</span>, <span class="number">3</span>)      <span class="comment"># DispatchKey: CPU</span></span><br><span class="line">sparse = torch.sparse_coo_tensor(...)  <span class="comment"># DispatchKey: SparseCPU</span></span><br><span class="line">result = dense + sparse        <span class="comment"># 应该调用什么实现？</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="源码实现"><a href="#源码实现" class="headerlink" title="源码实现"></a>源码实现</h4><p>关键代码在 <code>DispatchKeyExtractor.h</code> 的 <code>MultiDispatchKeySet</code> 结构体：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// DispatchKeyExtractor.h:54-102</span></span><br><span class="line"><span class="keyword">namespace</span> detail &#123;</span><br><span class="line"><span class="comment">// 从多个参数中提取 DispatchKeySet</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">MultiDispatchKeySet</span> : at::IterArgs&lt;MultiDispatchKeySet&gt; &#123;</span><br><span class="line">  DispatchKeySet ts;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 提取 Tensor 的 key_set</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> at::Tensor&amp; x)</span> </span>&#123;</span><br><span class="line">    ts = ts | x.<span class="built_in">key_set</span>();  <span class="comment">// OR 操作，合并所有 key</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 处理 optional Tensor</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> std::optional&lt;at::Tensor&gt;&amp; x)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (x.<span class="built_in">has_value</span>()) &#123;</span><br><span class="line">      ts = ts | x-&gt;<span class="built_in">key_set</span>();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 处理 Tensor 列表</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> std::vector&lt;at::Tensor&gt;&amp; xs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; x : xs) &#123;</span><br><span class="line">      ts = ts | x.<span class="built_in">key_set</span>();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 其他类型忽略</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> T&amp; <span class="comment">/*unused*/</span>)</span> </span>&#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 入口函数</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span>... Args&gt;</span><br><span class="line"><span class="function">DispatchKeySet <span class="title">multi_dispatch_key_set</span><span class="params">(<span class="type">const</span> Args&amp;... args)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">MultiDispatchKeySet</span>().<span class="built_in">apply</span>(args...).ts;</span><br><span class="line">&#125;</span><br><span class="line">&#125; <span class="comment">// namespace detail</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="合并规则：位运算-OR"><a href="#合并规则：位运算-OR" class="headerlink" title="合并规则：位运算 OR"></a>合并规则：位运算 OR</h4><p>每个 Tensor 的 <code>key_set()</code> 返回一个 <code>DispatchKeySet</code>，其中包含了该张量所有的 dispatch key：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 假设</span></span><br><span class="line">dense.<span class="built_in">key_set</span>()     = DispatchKey::CPU + DispatchKey::Dense</span><br><span class="line">sparse.<span class="built_in">key_set</span>()    = DispatchKey::SparseCPU + DispatchKey::Sparse</span><br><span class="line"></span><br><span class="line"><span class="comment">// 合并时做 OR</span></span><br><span class="line">combined = dense.<span class="built_in">key_set</span>() | sparse.<span class="built_in">key_set</span>()</span><br><span class="line"><span class="comment">// 结果 = &#123;CPU, Dense, SparseCPU, Sparse&#125; 的位标志组合</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="优先级排序：功能键-后端键"><a href="#优先级排序：功能键-后端键" class="headerlink" title="优先级排序：功能键 &gt; 后端键"></a>优先级排序：功能键 &gt; 后端键</h4><p><code>DispatchKeySet</code> 内部用 64 位表示，其中：</p>
+<ul>
+<li><strong>低 16 位</strong>：BackendComponent（CPU、CUDA 等）</li>
+<li><strong>高 48 位</strong>：功能键（Autograd、Sparse、Quantized 等）</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">比特位置: 63 ... 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0</span><br><span class="line">         ├─────────────┼────┤</span><br><span class="line">         │ 功能键区域   │后端 │</span><br><span class="line">         └─────────────┴────┘</span><br></pre></td></tr></table></figure>
+
+<p>优先级提取逻辑在 <code>DispatchKeySet.h</code>：</p>
+<h4 id="三个函数的逻辑解析"><a href="#三个函数的逻辑解析" class="headerlink" title="三个函数的逻辑解析"></a>三个函数的逻辑解析</h4><p>假设我们有这样一个合并后的 <code>DispatchKeySet</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">repr_ = 0b 00000000 10000000 01000000 00000000 00000000 00000000 00000000 00110010</span><br><span class="line">        ├───────────────────────────────────────┤ ├─────────────────────────────┤</span><br><span class="line">        高位功能键区域                              低位后端区域</span><br><span class="line">        功能键: Sparse(bit 18), Dense(bit 17)       后端: CPU(bit 1)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<p><strong>第一步：<code>highestFunctionalityKey()</code></strong></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DispatchKey <span class="title">highestFunctionalityKey</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> functionality_idx = <span class="built_in">indexOfHighestBit</span>();  <span class="comment">// 找到最高位的 bit 位置</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 功能键区域从 bit 16 开始（num_backends = 16）</span></span><br><span class="line">  <span class="comment">// 如果最高位在 backend 区域（&lt; 16），说明没有功能键</span></span><br><span class="line">  <span class="keyword">if</span> (functionality_idx &lt; num_backends)</span><br><span class="line">    <span class="keyword">return</span> DispatchKey::Undefined;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 将 bit 位置转换为 DispatchKey 枚举值</span></span><br><span class="line">  <span class="comment">// functionality_idx=18 → DispatchKey::Sparse</span></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;DispatchKey&gt;(functionality_idx - num_backends);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于上面的例子：</p>
+<ul>
+<li><code>indexOfHighestBit()</code> 返回 18（最高功能键是 Sparse）</li>
+<li><code>18 - 16 = 2</code> → <code>DispatchKey::Sparse</code></li>
+<li>功能键优先级：<code>Sparse(bit 18) &gt; Dense(bit 17)</code></li>
+</ul>
+<hr>
+<p><strong>第二步：<code>highestBackendKey()</code></strong></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">BackendComponent <span class="title">highestBackendKey</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 先用 mask 提取 backend 区域（只保留低 16 位）</span></span><br><span class="line">  <span class="keyword">auto</span> backend_idx =</span><br><span class="line">      <span class="built_in">DispatchKeySet</span>(repr_ &amp; full_backend_mask).<span class="built_in">indexOfHighestBit</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// bit 0 没有意义（代表 InvalidBit），所以 0 表示&quot;没有后端&quot;</span></span><br><span class="line">  <span class="keyword">if</span> (backend_idx == <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">return</span> BackendComponent::InvalidBit;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;BackendComponent&gt;(backend_idx);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于上面的例子：</p>
+<ul>
+<li><code>repr_ &amp; full_backend_mask</code> 提取后得到 <code>0b 0010</code>（只有 bit 1 和 bit 0 置位）</li>
+<li><code>indexOfHighestBit()</code> 返回 1</li>
+<li><code>BackendComponent(1)</code> → <code>CPU</code></li>
+</ul>
+<hr>
+<p><strong>第三步：<code>highestPriorityTypeId()</code> 组合为最终 key</strong></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DispatchKey <span class="title">highestPriorityTypeId</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 1. 获取最高功能键（Sparse）</span></span><br><span class="line">  <span class="keyword">auto</span> functionality_k = <span class="built_in">highestFunctionalityKey</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 2. 检查是否是&quot;per-backend&quot;功能键</span></span><br><span class="line">  <span class="comment">//    Sparse、Dense、Quantized、AutogradFunctionality 都是 per-backend 的</span></span><br><span class="line">  <span class="comment">//    而 AutogradOther、Functionalize 等不是 per-backend</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">isPerBackendFunctionalityKey</span>(functionality_k)) &#123;</span><br><span class="line">    <span class="comment">// 3. per-backend 功能键需要组合后端键</span></span><br><span class="line">    <span class="comment">//    Sparse + CPU → SparseCPU</span></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">toRuntimePerBackendFunctionalityKey</span>(</span><br><span class="line">        functionality_k, <span class="built_in">highestBackendKey</span>());</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 4. 非 per-backend 功能键直接返回</span></span><br><span class="line">  <span class="keyword">return</span> functionality_k;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于 <code>Sparse + CPU</code> 的例子：</p>
+<ul>
+<li><code>functionality_k = Sparse</code></li>
+<li><code>isPerBackendFunctionalityKey(Sparse)</code> → true</li>
+<li><code>toRuntimePerBackendFunctionalityKey(Sparse, CPU)</code> → <code>DispatchKey::SparseCPU</code></li>
+</ul>
+<hr>
+<h4 id="为什么这样设计？"><a href="#为什么这样设计？" class="headerlink" title="为什么这样设计？"></a>为什么这样设计？</h4><p>功能键和后端键是<strong>分开的优先级系统</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">优先级顺序（从高到低）:</span><br><span class="line">┌─────────────────────────────────────────────────────┐</span><br><span class="line">│ FuncTorchBatched (bit 45)                           │</span><br><span class="line">│ AutogradFunctionality (bit 24)                      │</span><br><span class="line">│ Sparse (bit 18)        ← 功能键                    │</span><br><span class="line">│ Dense (bit 17)                                      │</span><br><span class="line">│ Quantized (bit 16)                                  │</span><br><span class="line">├─────────────────────────────────────────────────────┤</span><br><span class="line">│ EndOfFunctionalityKeys = bit 15 (分界线)            │</span><br><span class="line">├─────────────────────────────────────────────────────┤</span><br><span class="line">│ CUDA (bit 2)           ← 后端键                    │</span><br><span class="line">│ CPU (bit 1)                                          │</span><br><span class="line">└─────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><strong>先比功能键</strong>：Sparse &gt; Dense &gt; Quantized，所以 Sparse 优先被处理</li>
+<li><strong>功能键确定后，再看后端</strong>：如果是 Sparse，具体是 SparseCPU 还是 SparseCUDA？</li>
+<li><strong>组合</strong>：Sparse + CPU &#x3D; SparseCPU</li>
+</ol>
+<p>这种设计允许：</p>
+<ul>
+<li><code>dense + dense</code> → 查找 <code>CPU</code> 实现</li>
+<li><code>sparse + dense</code> → 查找 <code>SparseCPU</code> 实现（功能键更优先）</li>
+<li><code>dense + dense (on CUDA)</code> → 查找 <code>CUDA</code> 实现</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 两个 tensor 的 key set</span></span><br><span class="line">DispatchKeySet dense_keys = <span class="built_in">DispatchKeySet</span>(&#123;</span><br><span class="line">    DispatchKey::CPU,        <span class="comment">// 后端: CPU</span></span><br><span class="line">    DispatchKey::Dense       <span class="comment">// 功能: 稠密</span></span><br><span class="line">&#125;);</span><br><span class="line"></span><br><span class="line">DispatchKeySet sparse_keys = <span class="built_in">DispatchKeySet</span>(&#123;</span><br><span class="line">    DispatchKey::SparseCPU,  <span class="comment">// 后端: CPU + 功能: Sparse</span></span><br><span class="line">    DispatchKey::Sparse       <span class="comment">// 功能: 稀疏</span></span><br><span class="line">&#125;);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 合并</span></span><br><span class="line">DispatchKeySet combined = dense_keys | sparse_keys;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 分析优先级</span></span><br><span class="line"><span class="comment">// 1. 找最高功能键: Sparse (bit 18) &gt; Dense (bit 17)</span></span><br><span class="line"><span class="comment">//    → 功能键 = Sparse</span></span><br><span class="line"><span class="comment">// 2. 找最高后端键: CPU (bit 1)</span></span><br><span class="line"><span class="comment">//    → 后端 = CPU</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 最终 dispatch key = SparseCPU</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="分派表查找"><a href="#分派表查找" class="headerlink" title="分派表查找"></a>分派表查找</h4><p><code>OperatorEntry.cpp</code> 中的 <code>lookup</code> 函数根据提取的 key 定位 kernel：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// OperatorEntry.cpp:182-200</span></span><br><span class="line"><span class="function">KernelFunction <span class="title">lookup</span><span class="params">(DispatchKeySet dispatchKeySet)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 从 keyset 计算表索引</span></span><br><span class="line">  <span class="keyword">auto</span> table_idx = dispatchKeySet.<span class="built_in">getDispatchTableIndexForDispatchKeySet</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 从 dispatch table 获取 kernel</span></span><br><span class="line">  <span class="keyword">return</span> dispatchTable_[table_idx];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>调度器为每种功能键+后端键组合预留了表项，例如：</p>
+<ul>
+<li><code>Dense + CPU</code> → 表项 1</li>
+<li><code>Sparse + CPU</code> → 表项 2</li>
+<li><code>Dense + CUDA</code> → 表项 3</li>
+</ul>
+<p>这样 <code>sparse_tensor + dense_tensor</code> 会查找到 <code>SparseCPU</code> 的实现，而 <code>dense + dense</code> 则查找到 <code>CPU</code> 的实现。</p>
+<h4 id="分派表查找的-fallback-机制"><a href="#分派表查找的-fallback-机制" class="headerlink" title="分派表查找的 fallback 机制"></a>分派表查找的 fallback 机制</h4><p>如果某个操作符在特定 DispatchKey 上没有注册专门的 kernel，调度器会依次尝试以下策略：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// OperatorEntry.cpp:451-471</span></span><br><span class="line"><span class="function"><span class="type">const</span> AnnotatedKernel&amp; <span class="title">OperatorEntry::computeDispatchTableEntryWithDebug</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> Dispatcher&amp; dispatcher,</span></span></span><br><span class="line"><span class="params"><span class="function">    DispatchKey dispatch_key)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 1. 查找该操作符专门注册在此 key 上的 kernel</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="keyword">auto</span> registered = <span class="built_in">getKernelForDispatchKey</span>(dispatch_key)) &#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;*registered, <span class="string">&quot;registered kernel&quot;</span>&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 2. 查找 catch-all kernel（没有指定 dispatch key 的默认实现）</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="keyword">auto</span> catch_all = <span class="built_in">getKernelForDispatchKey</span>(DispatchKey::Undefined)) &#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;*catch_all, <span class="string">&quot;catch-all&quot;</span>&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 3. 查找该后端的 backend fallback</span></span><br><span class="line">  <span class="keyword">auto</span> dispatch_ix = <span class="built_in">getDispatchTableIndexForDispatchKey</span>(dispatch_key);</span><br><span class="line">  <span class="keyword">if</span> (dispatch_ix &lt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="built_in">missingKernel</span>(), <span class="string">&quot;backend fallback not registered on mobile&quot;</span>&#125;;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (dispatcher.backendFallbackKernels_[dispatch_ix].kernel.<span class="built_in">isValid</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;dispatcher.backendFallbackKernels_[dispatch_ix], <span class="string">&quot;backend fallback&quot;</span>&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 4. 最终回退：返回 missing kernel（会报运行时错误）</span></span><br><span class="line">  <span class="keyword">return</span> &#123;<span class="built_in">missingKernel</span>(), <span class="string">&quot;missing&quot;</span>&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="四层-fallback-策略"><a href="#四层-fallback-策略" class="headerlink" title="四层 fallback 策略"></a>四层 fallback 策略</h5><table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>来源</th>
+<th>触发条件</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>1. 注册 kernel</strong></td>
+<td><code>m.impl(&quot;add&quot;, torch::kCUDA, ...)</code></td>
+<td>操作符为特定 key 注册了 kernel</td>
+<td><code>add.CUDA</code> 实现</td>
+</tr>
+<tr>
+<td><strong>2. Catch-all kernel</strong></td>
+<td><code>m.impl(&quot;add&quot;, ...)</code> (无 key)</td>
+<td>没有为当前 key 注册，但有默认实现</td>
+<td><code>add</code> 的通用实现</td>
+</tr>
+<tr>
+<td><strong>3. Backend fallback</strong></td>
+<td><code>dispatcher.registerFallback(...)</code></td>
+<td>整个后端没有实现</td>
+<td>XLA 后端没有 <code>mm</code> 实现</td>
+</tr>
+<tr>
+<td><strong>4. Missing kernel</strong></td>
+<td>N&#x2F;A</td>
+<td>上述都不存在</td>
+<td>报错：”没有 kernel”</td>
+</tr>
+</tbody></table>
+<h5 id="Backend-Fallback-的用途"><a href="#Backend-Fallback-的用途" class="headerlink" title="Backend Fallback 的用途"></a>Backend Fallback 的用途</h5><p>Backend fallback 是调度器为整个后端设置的<strong>兜底 kernel</strong>。主要用途：</p>
+<ol>
+<li><strong>跨设备兼容性</strong>：如果某个操作在 XLA 上没有专门实现，可以 fallback 到 CPU 实现</li>
+<li><strong>开发阶段</strong>：新后端在开发中时，可以先用 fallback 提供基本功能</li>
+<li><strong>移动端优化</strong>：在移动端，fallback 可以提供轻量级的通用实现</li>
+</ol>
+<p>注册 backend fallback：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Dispatcher.h:294-297</span></span><br><span class="line"><span class="comment">// 注册一个后端级别的 fallback kernel</span></span><br><span class="line"><span class="function">RegistrationHandleRAII <span class="title">registerFallback</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    DispatchKey dispatch_key,</span></span></span><br><span class="line"><span class="params"><span class="function">    KernelFunction kernel,</span></span></span><br><span class="line"><span class="params"><span class="function">    std::string debug)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 示例：XLA 后端的 fallback</span></span><br><span class="line">dispatcher.<span class="built_in">registerFallback</span>(</span><br><span class="line">    DispatchKey::XLA,</span><br><span class="line">    torch::CppFunction::<span class="built_in">makeFromBoxedFunction</span>&lt;&amp;xla_generic_fallback&gt;()</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<h5 id="Catch-all-Kernel-vs-Backend-Fallback"><a href="#Catch-all-Kernel-vs-Backend-Fallback" class="headerlink" title="Catch-all Kernel vs Backend Fallback"></a>Catch-all Kernel vs Backend Fallback</h5><p>两者都是”找不到专门实现时的兜底”，但范围不同：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    调度器                                     │</span><br><span class="line">├─────────────────────────────────────────────────────────────┤</span><br><span class="line">│                                                             │</span><br><span class="line">│  操作符 &quot;mm&quot; (矩阵乘法)                                       │</span><br><span class="line">│                                                             │</span><br><span class="line">│  ├── 为 CUDA 注册了专门的 kernel ──────────→ CUDA kernel    │</span><br><span class="line">│  │                                                     │</span><br><span class="line">│  │  没找到？                                          │</span><br><span class="line">│  │                                                     │</span><br><span class="line">│  ├── 查找 catch-all kernel ──────────────→ 通用 kernel   │</span><br><span class="line">│  │                                                     │</span><br><span class="line">│  │  也没找到？                                        │</span><br><span class="line">│  │                                                     │</span><br><span class="line">│  └── backend fallback (XLA) ──────────────→ XLA fallback  │</span><br><span class="line">│                                                             │</span><br><span class="line">│  其他操作符（如 add）                                       │</span><br><span class="line">│                                                             │</span><br><span class="line">│  ├── 同样先查专门实现                                       │</span><br><span class="line">│  ├── 再查 catch-all                                        │</span><br><span class="line">│  └── 最后查 backend fallback                               │</span><br><span class="line">│                                                             │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>Catch-all kernel</strong>：属于特定操作符的默认实现</li>
+<li><strong>Backend fallback</strong>：属于整个后端的兜底实现，作用于所有在该后端上调用的操作符</li>
+</ul>
+<hr>
+<h2 id="第五章：开放注册系统"><a href="#第五章：开放注册系统" class="headerlink" title="第五章：开放注册系统"></a>第五章：开放注册系统</h2><h3 id="注册操作符"><a href="#注册操作符" class="headerlink" title="注册操作符"></a>注册操作符</h3><p>现代调度器允许在任何时候注册新的操作符实现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 使用 torch::RegisterOperators()</span></span><br><span class="line"><span class="built_in">TORCH_LIBRARY</span>(my_ops, m) &#123;</span><br><span class="line">    m.<span class="built_in">def</span>(<span class="string">&quot;silu(Tensor x) -&gt; Tensor&quot;</span>);</span><br><span class="line">    m.<span class="built_in">impl</span>(<span class="string">&quot;silu&quot;</span>, torch::kCPU, &amp;silu_cpu_impl);</span><br><span class="line">    m.<span class="built_in">impl</span>(<span class="string">&quot;silu&quot;</span>, torch::kCUDA, &amp;silu_cuda_impl);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这与 vtable 模式形成鲜明对比：</p>
+<ul>
+<li><strong>vtable 模式</strong>：在类定义时确定所有操作，子类必须实现所有虚函数</li>
+<li><strong>调度器模式</strong>：操作符和实现可以独立注册，互不影响</li>
+</ul>
+<h3 id="动态库加载"><a href="#动态库加载" class="headerlink" title="动态库加载"></a>动态库加载</h3><p>调度器支持动态加载&#x2F;卸载 kernel：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// OperatorEntry.cpp 中的注释</span></span><br><span class="line"><span class="comment">// NOLINTBEGIN(performance-move-const-arg)</span></span><br><span class="line"><span class="comment">// Note [Jupyter notebook style re-registration]</span></span><br><span class="line"><span class="comment">// Operator entries are designed to be re-registered at a later date,</span></span><br><span class="line"><span class="comment">// either from a newly-loaded shared library or a notebook cell.</span></span><br><span class="line"><span class="comment">// This allows kernel implementations to be updated without restarting</span></span><br><span class="line"><span class="comment">// the Python interpreter.</span></span><br><span class="line"><span class="comment">// NOLINTEND(performance-move-const-arg)</span></span><br></pre></td></tr></table></figure>
+
+<p>这意味着用户可以在 Jupyter notebook 中修改 kernel 实现，无需重启 Python 环境。</p>
+<hr>
+<h2 id="第六章：自动装箱（Automatic-Boxing）"><a href="#第六章：自动装箱（Automatic-Boxing）" class="headerlink" title="第六章：自动装箱（Automatic Boxing）"></a>第六章：自动装箱（Automatic Boxing）</h2><h3 id="问题背景"><a href="#问题背景" class="headerlink" title="问题背景"></a>问题背景</h3><p>操作符注册时，需要处理类型参数。例如：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用户调用</span></span><br><span class="line">result = torch.add.apply(x, y)</span><br></pre></td></tr></table></figure>
+
+<p>这里的 <code>x</code> 和 <code>y</code> 是 <strong>PyObject</strong>*（Python 对象），但 kernel 实现期望的是具体类型（如 <code>float*</code>）。</p>
+<p><strong>boxing</strong>：将 Python 对象转换为内部表示（如 <code>TensorImpl*</code>）<br><strong>unboxing</strong>：将内部表示转换回 Python 对象</p>
+<h3 id="Sebastian-Messmer-的工作"><a href="#Sebastian-Messmer-的工作" class="headerlink" title="Sebastian Messmer 的工作"></a>Sebastian Messmer 的工作</h3><p>自动装箱是一个多年项目，由 Sebastian Messmer 领导。它引入了模板技术来自动处理boxing&#x2F;unboxing，使得编写 kernel 不需要手动处理 Python &lt;-&gt; C++ 转换。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 手动boxing（以前）</span></span><br><span class="line"><span class="function">PyObject* <span class="title">add_impl</span><span class="params">(PyObject* self, PyObject* args)</span> </span>&#123;</span><br><span class="line">    PyObject* tensor1 = <span class="built_in">PyTuple_GET_ITEM</span>(args, <span class="number">0</span>);</span><br><span class="line">    PyObject* tensor2 = <span class="built_in">PyTuple_GET_ITEM</span>(args, <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    TensorImpl* impl1 = <span class="built_in">pyobject_to_tensor</span>(tensor1);  <span class="comment">// 手动unboxing</span></span><br><span class="line">    TensorImpl* impl2 = <span class="built_in">pyobject_to_tensor</span>(tensor2);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 调用 kernel</span></span><br><span class="line">    Tensor result = impl1-&gt;<span class="built_in">add</span>(*impl2);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 手动boxing</span></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">tensor_to_pyobject</span>(result);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 自动boxing（现在）</span></span><br><span class="line"><span class="comment">// 调度器自动处理 unboxed -&gt; boxed 的转换</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="第七章：历史约束与设计权衡"><a href="#第七章：历史约束与设计权衡" class="headerlink" title="第七章：历史约束与设计权衡"></a>第七章：历史约束与设计权衡</h2><h3 id="CPU-和-CUDA-分离到不同库"><a href="#CPU-和-CUDA-分离到不同库" class="headerlink" title="CPU 和 CUDA 分离到不同库"></a>CPU 和 CUDA 分离到不同库</h3><p>由于历史原因，CPU 和 CUDA 实现分布在不同的动态库中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">libtorch_cpu.so      // CPU 实现</span><br><span class="line">libtorch_cuda.so     // CUDA 实现</span><br></pre></td></tr></table></figure>
+
+<p>调度器的设计必须能够跨越这些库边界进行调用。虚拟分派天然支持这一点（虚函数表在运行时解析），而现代调度器通过 <code>DispatchKey</code> 机制实现了类似的功能。</p>
+<h3 id="开放注册的需求"><a href="#开放注册的需求" class="headerlink" title="开放注册的需求"></a>开放注册的需求</h3><p>用户，尤其是 Facebook 的内部团队，需要能够注册自定义操作符。这些操作符可能不被任何”官方”后端支持，但仍然需要能够参与调度。</p>
+<p>调度器的设计允许：</p>
+<ol>
+<li>注册新的 kernel 实现</li>
+<li>覆盖现有的 kernel 实现</li>
+<li>为特定的 BackendComponent 注册 fallback</li>
+</ol>
+<h3 id="性能-vs-可扩展性"><a href="#性能-vs-可扩展性" class="headerlink" title="性能 vs 可扩展性"></a>性能 vs 可扩展性</h3><p>现代调度器比 vtable 模式<strong>慢</strong>，但换取了更好的可扩展性和灵活性。这是刻意的权衡：</p>
+<table>
+<thead>
+<tr>
+<th>权衡</th>
+<th>vtable 模式</th>
+<th>调度器模式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单一操作调用性能</td>
+<td>更快（虚函数调用）</td>
+<td>稍慢（查找 + 函数指针）</td>
+</tr>
+<tr>
+<td>可扩展性</td>
+<td>差（需要修改基类）</td>
+<td>好（独立注册）</td>
+</tr>
+<tr>
+<td>多重分派</td>
+<td>不支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>动态加载</td>
+<td>困难</td>
+<td>容易</td>
+</tr>
+</tbody></table>
+<p><a href="aten/src/ATen/core/dispatch/README.md">README.md</a> 中明确说明了设计目标：</p>
+<blockquote>
+<p>This folder contains the c10 dispatcher. This dispatcher is a single point through which we are planning to route all kernel calls. Existing dispatch mechanisms from legacy PyTorch or caffe2 are planned to be replaced.</p>
+</blockquote>
+<hr>
+<h2 id="总结：理解调度器的演进"><a href="#总结：理解调度器的演进" class="headerlink" title="总结：理解调度器的演进"></a>总结：理解调度器的演进</h2><p>PyTorch 调度器的历史，反映了深度学习框架从研究原型到生产系统的演进：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>技术</th>
+<th>局限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>TH 库</strong></td>
+<td>C + 宏生成</td>
+<td>无泛型，代码膨胀</td>
+</tr>
+<tr>
+<td><strong>A10&#x2F;ATen</strong></td>
+<td>C++ 虚函数分派</td>
+<td>vtable 难以扩展</td>
+</tr>
+<tr>
+<td><strong>现代调度器</strong></td>
+<td>自研分派机制 + DispatchKey</td>
+<td>性能略低于虚调用，但灵活性大增</td>
+</tr>
+</tbody></table>
+<p>理解这些历史约束，有助于理解为什么 PyTorch 的代码库如此复杂，以及为什么某些设计决策是必要的。</p>
+<p>当你下次调用 <code>torch.add(a, b)</code> 时，可以想象背后发生的故事：一个从 Lua Torch 的 C 代码演进而来的系统，经过 A10 的虚函数分派，最终演变为今天这个精密的调度机制——它在每次调用时动态决定应该执行哪一段代码，以支持从 CPU 到 GPU、从稠密到稀疏、从普通操作到自定义操作的广泛场景。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_2.pytorch-dispatcher-history/">http://example.com/2026/05/24/publish_2.pytorch-dispatcher-history/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_10.pytorch-variable-evolution/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch variable evolution
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_5.pytorch-inference-mode/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch inference mode
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

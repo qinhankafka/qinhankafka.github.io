@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>1.pytorch distributed training | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch CUDA 入门（扩展）：分布式训练与推理引言：从单 GPU 到多 GPU 集群现代大模型需要大量 GPU 同时运行。假设我们有2 台服务器，每台 4 GPU——共 8 个 GPU，需要协调工作。 PyTorch 通过 torch.distributed 支持多节点分布式训练和推理。  分布式核心概念进程组模型每个 GPU 对应一个进程，这些进程组织成进程组：    概念 说明">
+<meta property="og:type" content="article">
+<meta property="og:title" content="1.pytorch distributed training">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_6.1.pytorch-distributed-training/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch CUDA 入门（扩展）：分布式训练与推理引言：从单 GPU 到多 GPU 集群现代大模型需要大量 GPU 同时运行。假设我们有2 台服务器，每台 4 GPU——共 8 个 GPU，需要协调工作。 PyTorch 通过 torch.distributed 支持多节点分布式训练和推理。  分布式核心概念进程组模型每个 GPU 对应一个进程，这些进程组织成进程组：    概念 说明">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.196Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        1.pytorch distributed training
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%8E%E5%8D%95-GPU-%E5%88%B0%E5%A4%9A-GPU-%E9%9B%86%E7%BE%A4"><span class="toc-text">引言：从单 GPU 到多 GPU 集群</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">分布式核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%BB%84%E6%A8%A1%E5%9E%8B"><span class="toc-text">进程组模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E9%80%89%E6%8B%A9"><span class="toc-text">后端选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B"><span class="toc-text">初始化流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#torchrun-%E5%90%AF%E5%8A%A8"><span class="toc-text">torchrun 启动</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%A6%82%E4%BD%95%E6%89%BE%E5%88%B0%E5%BD%BC%E6%AD%A4%EF%BC%9F"><span class="toc-text">服务器如何找到彼此？</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8F%82%E6%95%B0"><span class="toc-text">核心参数</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">工作流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F%E6%96%B9%E5%BC%8F"><span class="toc-text">环境变量方式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SSH-%E6%97%A0%E5%AF%86%E7%A0%81%E8%AE%BF%E9%97%AE"><span class="toc-text">SSH 无密码访问</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%8E%E4%BD%9C%E4%B8%9A%E8%B0%83%E5%BA%A6%E5%99%A8%E9%9B%86%E6%88%90"><span class="toc-text">与作业调度器集成</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#init-process-group"><span class="toc-text">init_process_group</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E5%88%9D%E5%A7%8B%E5%8C%96%E6%96%B9%E5%BC%8F"><span class="toc-text">两种初始化方式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E6%B5%81%E7%A8%8B"><span class="toc-text">内部流程</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Store-%E6%9C%BA%E5%88%B6%EF%BC%9A%E8%BF%9B%E7%A8%8B%E9%97%B4%E5%8D%8F%E8%B0%83"><span class="toc-text">Store 机制：进程间协调</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%8F%E9%9A%9C%E5%90%8C%E6%AD%A5"><span class="toc-text">屏障同步</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E8%A7%86%E8%A7%92%E6%B1%87%E6%80%BB"><span class="toc-text">进程视角汇总</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E9%80%9A%E4%BF%A1%EF%BC%88Collective-Communication%EF%BC%89"><span class="toc-text">集合通信（Collective Communication）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#AllReduce%EF%BC%9A%E8%B7%A8-GPU-%E5%90%8C%E6%AD%A5%E6%A2%AF%E5%BA%A6"><span class="toc-text">AllReduce：跨 GPU 同步梯度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Broadcast%EF%BC%9A%E4%BB%8E%E4%B8%80%E4%B8%AA%E8%BF%9B%E7%A8%8B%E5%B9%BF%E6%92%AD%E6%95%B0%E6%8D%AE"><span class="toc-text">Broadcast：从一个进程广播数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AllGather%EF%BC%9A%E6%94%B6%E9%9B%86%E6%89%80%E6%9C%89%E8%BF%9B%E7%A8%8B%E7%9A%84%E6%95%B0%E6%8D%AE"><span class="toc-text">AllGather：收集所有进程的数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DistributedDataParallel%EF%BC%88DDP%EF%BC%89"><span class="toc-text">DistributedDataParallel（DDP）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">核心原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E6%B5%81%E7%A8%8B"><span class="toc-text">训练流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A2%AF%E5%BA%A6%E5%90%8C%E6%AD%A5%E5%AE%9E%E7%8E%B0"><span class="toc-text">梯度同步实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E5%A4%87%E7%BD%91%E6%A0%BC%EF%BC%88Device-Mesh%EF%BC%89"><span class="toc-text">设备网格（Device Mesh）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%9C%E7%94%A8"><span class="toc-text">作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%A8%E9%80%94%EF%BC%9A%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%B9%B6%E8%A1%8C"><span class="toc-text">用途：流水线并行</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%8E%A8%E7%90%86"><span class="toc-text">分布式推理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8E%E8%AE%AD%E7%BB%83%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">与训练的区别</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E5%88%86%E5%8F%91"><span class="toc-text">输入分发</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%93%E6%9E%9C%E6%94%B6%E9%9B%86"><span class="toc-text">结果收集</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%90%AF%E5%8A%A8%E5%91%BD%E4%BB%A4"><span class="toc-text">1. 启动命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%88%86%E5%B8%83%E5%BC%8F%E6%95%B0%E6%8D%AE%E5%8A%A0%E8%BD%BD"><span class="toc-text">2. 分布式数据加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%B7%B7%E5%90%88%E7%B2%BE%E5%BA%A6%E8%AE%AD%E7%BB%83"><span class="toc-text">3. 混合精度训练</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%8E%E5%8D%95-GPU-%E5%88%B0%E5%A4%9A-GPU-%E9%9B%86%E7%BE%A4"><span class="toc-text">引言：从单 GPU 到多 GPU 集群</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">分布式核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%BB%84%E6%A8%A1%E5%9E%8B"><span class="toc-text">进程组模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E9%80%89%E6%8B%A9"><span class="toc-text">后端选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B"><span class="toc-text">初始化流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#torchrun-%E5%90%AF%E5%8A%A8"><span class="toc-text">torchrun 启动</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%A6%82%E4%BD%95%E6%89%BE%E5%88%B0%E5%BD%BC%E6%AD%A4%EF%BC%9F"><span class="toc-text">服务器如何找到彼此？</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8F%82%E6%95%B0"><span class="toc-text">核心参数</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">工作流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F%E6%96%B9%E5%BC%8F"><span class="toc-text">环境变量方式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SSH-%E6%97%A0%E5%AF%86%E7%A0%81%E8%AE%BF%E9%97%AE"><span class="toc-text">SSH 无密码访问</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%8E%E4%BD%9C%E4%B8%9A%E8%B0%83%E5%BA%A6%E5%99%A8%E9%9B%86%E6%88%90"><span class="toc-text">与作业调度器集成</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#init-process-group"><span class="toc-text">init_process_group</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E5%88%9D%E5%A7%8B%E5%8C%96%E6%96%B9%E5%BC%8F"><span class="toc-text">两种初始化方式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E6%B5%81%E7%A8%8B"><span class="toc-text">内部流程</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Store-%E6%9C%BA%E5%88%B6%EF%BC%9A%E8%BF%9B%E7%A8%8B%E9%97%B4%E5%8D%8F%E8%B0%83"><span class="toc-text">Store 机制：进程间协调</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%8F%E9%9A%9C%E5%90%8C%E6%AD%A5"><span class="toc-text">屏障同步</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E8%A7%86%E8%A7%92%E6%B1%87%E6%80%BB"><span class="toc-text">进程视角汇总</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E9%80%9A%E4%BF%A1%EF%BC%88Collective-Communication%EF%BC%89"><span class="toc-text">集合通信（Collective Communication）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#AllReduce%EF%BC%9A%E8%B7%A8-GPU-%E5%90%8C%E6%AD%A5%E6%A2%AF%E5%BA%A6"><span class="toc-text">AllReduce：跨 GPU 同步梯度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Broadcast%EF%BC%9A%E4%BB%8E%E4%B8%80%E4%B8%AA%E8%BF%9B%E7%A8%8B%E5%B9%BF%E6%92%AD%E6%95%B0%E6%8D%AE"><span class="toc-text">Broadcast：从一个进程广播数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AllGather%EF%BC%9A%E6%94%B6%E9%9B%86%E6%89%80%E6%9C%89%E8%BF%9B%E7%A8%8B%E7%9A%84%E6%95%B0%E6%8D%AE"><span class="toc-text">AllGather：收集所有进程的数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DistributedDataParallel%EF%BC%88DDP%EF%BC%89"><span class="toc-text">DistributedDataParallel（DDP）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">核心原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E6%B5%81%E7%A8%8B"><span class="toc-text">训练流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A2%AF%E5%BA%A6%E5%90%8C%E6%AD%A5%E5%AE%9E%E7%8E%B0"><span class="toc-text">梯度同步实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E5%A4%87%E7%BD%91%E6%A0%BC%EF%BC%88Device-Mesh%EF%BC%89"><span class="toc-text">设备网格（Device Mesh）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%9C%E7%94%A8"><span class="toc-text">作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%A8%E9%80%94%EF%BC%9A%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%B9%B6%E8%A1%8C"><span class="toc-text">用途：流水线并行</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%8E%A8%E7%90%86"><span class="toc-text">分布式推理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8E%E8%AE%AD%E7%BB%83%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">与训练的区别</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E5%88%86%E5%8F%91"><span class="toc-text">输入分发</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%93%E6%9E%9C%E6%94%B6%E9%9B%86"><span class="toc-text">结果收集</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%90%AF%E5%8A%A8%E5%91%BD%E4%BB%A4"><span class="toc-text">1. 启动命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%88%86%E5%B8%83%E5%BC%8F%E6%95%B0%E6%8D%AE%E5%8A%A0%E8%BD%BD"><span class="toc-text">2. 分布式数据加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%B7%B7%E5%90%88%E7%B2%BE%E5%BA%A6%E8%AE%AD%E7%BB%83"><span class="toc-text">3. 混合精度训练</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-CUDA-入门（扩展）：分布式训练与推理"><a href="#PyTorch-CUDA-入门（扩展）：分布式训练与推理" class="headerlink" title="PyTorch CUDA 入门（扩展）：分布式训练与推理"></a>PyTorch CUDA 入门（扩展）：分布式训练与推理</h1><h2 id="引言：从单-GPU-到多-GPU-集群"><a href="#引言：从单-GPU-到多-GPU-集群" class="headerlink" title="引言：从单 GPU 到多 GPU 集群"></a>引言：从单 GPU 到多 GPU 集群</h2><p>现代大模型需要大量 GPU 同时运行。假设我们有<strong>2 台服务器，每台 4 GPU</strong>——共 8 个 GPU，需要协调工作。</p>
+<p>PyTorch 通过 <code>torch.distributed</code> 支持<strong>多节点分布式训练和推理</strong>。</p>
+<hr>
+<h2 id="分布式核心概念"><a href="#分布式核心概念" class="headerlink" title="分布式核心概念"></a>分布式核心概念</h2><h3 id="进程组模型"><a href="#进程组模型" class="headerlink" title="进程组模型"></a>进程组模型</h3><p>每个 GPU 对应一个进程，这些进程组织成<strong>进程组</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>rank</strong></td>
+<td>当前进程在全局中的编号（0 ~ world_size-1）</td>
+</tr>
+<tr>
+<td><strong>world_size</strong></td>
+<td>总进程数（即总 GPU 数）</td>
+</tr>
+<tr>
+<td><strong>local_rank</strong></td>
+<td>当前服务器内的 GPU 编号（0~3）</td>
+</tr>
+<tr>
+<td><strong>group</strong></td>
+<td>进程的子集，用于部分 GPU 通信</td>
+</tr>
+</tbody></table>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Server 1 (local_rank 0-3)              Server 2 (local_rank 0-3)</span><br><span class="line">┌─────────────────┐              ┌─────────────────┐</span><br><span class="line">│ GPU 0 (rank 0)   │              │ GPU 0 (rank 4)   │</span><br><span class="line">│ GPU 1 (rank 1)   │              │ GPU 1 (rank 5)   │</span><br><span class="line">│ GPU 2 (rank 2)   │   网络       │ GPU 2 (rank 6)   │</span><br><span class="line">│ GPU 3 (rank 3)   │◄───────────►│ GPU 3 (rank 7)   │</span><br><span class="line">└─────────────────┘  InfiniBand   └─────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p><strong>总计</strong>：8 个进程，world_size&#x3D;8</p>
+<h3 id="后端选择"><a href="#后端选择" class="headerlink" title="后端选择"></a>后端选择</h3><p><a href="torch/distributed/distributed_c10d.py#L257-L307">torch&#x2F;distributed&#x2F;distributed_c10d.py:257-307</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Backend</span>(<span class="title class_ inherited__">str</span>):</span><br><span class="line">    GLOO = <span class="string">&quot;gloo&quot;</span>      <span class="comment"># CPU 通信，跨节点可用</span></span><br><span class="line">    NCCL = <span class="string">&quot;nccl&quot;</span>      <span class="comment"># GPU 通信，高性能</span></span><br><span class="line">    UCC = <span class="string">&quot;ucc&quot;</span>        <span class="comment"># 通用高性能通信</span></span><br><span class="line">    MPI = <span class="string">&quot;mpi&quot;</span>        <span class="comment"># 传统 MPI</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>NCCL</strong>：NVIDIA 的跨 GPU 通信库，专门优化了多节点 GPU 通信。</p>
+<hr>
+<h2 id="初始化流程"><a href="#初始化流程" class="headerlink" title="初始化流程"></a>初始化流程</h2><h3 id="torchrun-启动"><a href="#torchrun-启动" class="headerlink" title="torchrun 启动"></a>torchrun 启动</h3><p>使用 <code>torchrun</code>（推荐方式）启动 8 进程训练：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Server 1（主节点）</span></span><br><span class="line">torchrun --nproc_per_node=4 --nnodes=2 --rdzv_endpoint=192.168.1.1:29500 trainer.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># Server 2（从节点，同时执行）</span></span><br><span class="line">torchrun --nproc_per_node=4 --nnodes=2 --rdzv_endpoint=192.168.1.1:29500 trainer.py</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键</strong>：<code>--rdzv_endpoint</code> 指定了主节点地址，<code>--rdzv_id</code> 区分不同任务。</p>
+<h3 id="服务器如何找到彼此？"><a href="#服务器如何找到彼此？" class="headerlink" title="服务器如何找到彼此？"></a>服务器如何找到彼此？</h3><p><code>torchrun --nnodes=2</code> <strong>不会自动发现</strong>其他服务器，需要显式配置。</p>
+<h4 id="核心参数"><a href="#核心参数" class="headerlink" title="核心参数"></a>核心参数</h4><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--rdzv_id</code></td>
+<td>任务唯一标识，相同任务的不同进程用同一个 ID</td>
+</tr>
+<tr>
+<td><code>--rdzv_endpoint</code></td>
+<td>rendezvous 服务器地址（通常是主节点 IP:端口）</td>
+</tr>
+<tr>
+<td><code>--nnodes</code></td>
+<td>总节点数</td>
+</tr>
+<tr>
+<td><code>--nproc_per_node</code></td>
+<td>每台服务器的进程数</td>
+</tr>
+</tbody></table>
+<h4 id="工作流程"><a href="#工作流程" class="headerlink" title="工作流程"></a>工作流程</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">Server 1 (192.168.1.1)                          Server 2 (192.168.1.2)</span><br><span class="line">   │                                                │</span><br><span class="line">   │  torchrun --nnodes=2                          │</span><br><span class="line">   │  --rdzv_endpoint=192.168.1.1:29500             │</span><br><span class="line">   │                                              │</span><br><span class="line">   │  1. rank 0 启动 TCPStore daemon              │</span><br><span class="line">   │     监听 29500 端口                           │</span><br><span class="line">   │  2. rank 0 作为主节点等待连接                 │</span><br><span class="line">   │                                              │</span><br><span class="line">   │                     ←─── 连接 ──────────────►  │</span><br><span class="line">   │                   rank 4-7 连接主节点          │</span><br><span class="line">   │  3. barrier：等待所有 8 个进程                 │</span><br><span class="line">   │  4. 初始化完成                                 │</span><br></pre></td></tr></table></figure>
+
+<h4 id="环境变量方式"><a href="#环境变量方式" class="headerlink" title="环境变量方式"></a>环境变量方式</h4><p>如果不使用 torchrun 的参数，可以用环境变量：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Server 1</span></span><br><span class="line"><span class="built_in">export</span> MASTER_ADDR=192.168.1.1</span><br><span class="line"><span class="built_in">export</span> MASTER_PORT=29500</span><br><span class="line"><span class="built_in">export</span> WORLD_SIZE=8</span><br><span class="line"><span class="built_in">export</span> RANK=0</span><br><span class="line">python trainer.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># Server 2</span></span><br><span class="line"><span class="built_in">export</span> MASTER_ADDR=192.168.1.1</span><br><span class="line"><span class="built_in">export</span> MASTER_PORT=29500</span><br><span class="line"><span class="built_in">export</span> WORLD_SIZE=8</span><br><span class="line"><span class="built_in">export</span> RANK=4</span><br><span class="line">python trainer.py</span><br></pre></td></tr></table></figure>
+
+<h4 id="SSH-无密码访问"><a href="#SSH-无密码访问" class="headerlink" title="SSH 无密码访问"></a>SSH 无密码访问</h4><p>torchrun 内部通过 SSH 在远程服务器上启动进程。需要：</p>
+<ul>
+<li>服务器之间配置 <strong>SSH 无密码访问</strong>（密钥登录）</li>
+<li>或者使用共享的 SSH 密钥</li>
+</ul>
+<h4 id="与作业调度器集成"><a href="#与作业调度器集成" class="headerlink" title="与作业调度器集成"></a>与作业调度器集成</h4><p>如果使用 SLURM、Kubernetes 等调度器，torchrun 有专门的支持：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># SLURM 环境下</span></span><br><span class="line">srun torchrun --nnodes=2 trainer.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># torchrun 会自动从环境变量获取节点列表</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="init-process-group"><a href="#init-process-group" class="headerlink" title="init_process_group"></a>init_process_group</h3><p><strong>每个进程</strong>运行相同的代码，<code>init_process_group</code> 会自动完成协调：</p>
+<p><a href="torch/distributed/distributed_c10d.py#L1605-L1899">torch&#x2F;distributed&#x2F;distributed_c10d.py:1605-1899</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">init_process_group</span>(<span class="params"></span></span><br><span class="line"><span class="params">    backend: <span class="built_in">str</span> | <span class="literal">None</span> = <span class="literal">None</span>,      <span class="comment"># 后端：nccl, gloo</span></span></span><br><span class="line"><span class="params">    init_method: <span class="built_in">str</span> | <span class="literal">None</span> = <span class="literal">None</span>,  <span class="comment"># 如何找到其他进程</span></span></span><br><span class="line"><span class="params">    world_size: <span class="built_in">int</span> = -<span class="number">1</span>,            <span class="comment"># 总进程数</span></span></span><br><span class="line"><span class="params">    rank: <span class="built_in">int</span> = -<span class="number">1</span>,                  <span class="comment"># 当前进程编号</span></span></span><br><span class="line"><span class="params">    store: Store | <span class="literal">None</span> = <span class="literal">None</span>,       <span class="comment"># 进程间共享数据</span></span></span><br><span class="line"><span class="params"></span>):</span><br></pre></td></tr></table></figure>
+
+<h4 id="两种初始化方式"><a href="#两种初始化方式" class="headerlink" title="两种初始化方式"></a>两种初始化方式</h4><p><strong>方式 A：通过环境变量（torchrun 自动设置）</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">dist.init_process_group(backend=<span class="string">&quot;nccl&quot;</span>)</span><br><span class="line"><span class="comment"># torchrun 已设置 RANK=0, WORLD_SIZE=8 等环境变量</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>方式 B：手动指定</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">dist.init_process_group(</span><br><span class="line">    backend=<span class="string">&quot;nccl&quot;</span>,</span><br><span class="line">    init_method=<span class="string">&quot;tcp://192.168.1.1:29500&quot;</span>,</span><br><span class="line">    world_size=<span class="number">8</span>,</span><br><span class="line">    rank=<span class="number">0</span>  <span class="comment"># 每个进程设置不同的 rank</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<h4 id="内部流程"><a href="#内部流程" class="headerlink" title="内部流程"></a>内部流程</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">init_process_group(...)</span><br><span class="line">     │</span><br><span class="line">     ├──┬ 方式 A：store=None（torchrun 方式）</span><br><span class="line">     │  │        │</span><br><span class="line">     │  │        └── 直接使用 torchrun 提供的 store</span><br><span class="line">     │  │</span><br><span class="line">     │  └── 方式 B：store=None（手动方式）</span><br><span class="line">     │        │</span><br><span class="line">     │        └── rendezvous(init_method)</span><br><span class="line">     │                    │</span><br><span class="line">     │                    └── _create_c10d_store() → TCPStore</span><br><span class="line">     │                              │</span><br><span class="line">     │                              └── rank 0 启动 daemon</span><br><span class="line">     │</span><br><span class="line">     └── _new_process_group_helper</span><br><span class="line">               │</span><br><span class="line">               ├── PrefixStore 包装</span><br><span class="line">               ├── ProcessGroup(Store, rank, size)</span><br><span class="line">               └── _register_backend() 注册 NCCL</span><br><span class="line"></span><br><span class="line">     └── _store_based_barrier  # 等待所有 8 个进程就绪</span><br></pre></td></tr></table></figure>
+
+<h3 id="Store-机制：进程间协调"><a href="#Store-机制：进程间协调" class="headerlink" title="Store 机制：进程间协调"></a>Store 机制：进程间协调</h3><p>Store 是进程间共享数据的键值存储，通过它协调 8 个进程：</p>
+<table>
+<thead>
+<tr>
+<th>Store 类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>TCPStore</strong></td>
+<td>TCP 通信，多节点训练</td>
+</tr>
+<tr>
+<td><strong>FileStore</strong></td>
+<td>基于文件，单机多进程</td>
+</tr>
+<tr>
+<td><strong>HashStore</strong></td>
+<td>纯内存，测试用</td>
+</tr>
+</tbody></table>
+<p><a href="torch/_C/_distributed_c10d.pyi#L201-L252">torch&#x2F;_C&#x2F;_distributed_c10d.pyi:201-252</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Store</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">set</span>(<span class="params">self, key: <span class="built_in">str</span>, value: <span class="built_in">str</span></span>) -&gt; <span class="literal">None</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, key: <span class="built_in">str</span></span>) -&gt; <span class="built_in">bytes</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">add</span>(<span class="params">self, key: <span class="built_in">str</span>, value: <span class="built_in">int</span></span>) -&gt; <span class="built_in">int</span>  <span class="comment"># 原子递增</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">wait</span>(<span class="params">self, keys: <span class="built_in">list</span>[<span class="built_in">str</span>], timeout: timedelta</span>) -&gt; <span class="literal">None</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="屏障同步"><a href="#屏障同步" class="headerlink" title="屏障同步"></a>屏障同步</h3><p><a href="torch/distributed/distributed_c10d.py#L968-L1033">torch&#x2F;distributed&#x2F;distributed_c10d.py:968-1033</a></p>
+<p>初始化后，所有进程通过 barrier 确认彼此就绪：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">_store_based_barrier</span>(<span class="params">rank, store, group_name, rendezvous_count</span>):</span><br><span class="line">    store_key = <span class="string">f&quot;STORE_BASED_BARRIER:<span class="subst">&#123;group_name&#125;</span>&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># 每个进程到达时原子递增计数器</span></span><br><span class="line">    worker_count = store.add(store_key, <span class="number">1</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> worker_count == rendezvous_count:</span><br><span class="line">        <span class="comment"># 最后一个到达的进程设置标记，唤醒其他进程</span></span><br><span class="line">        store.<span class="built_in">set</span>(<span class="string">f&quot;<span class="subst">&#123;store_key&#125;</span>:last_worker&quot;</span>, <span class="string">&quot;1&quot;</span>)</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        store.wait([<span class="string">f&quot;<span class="subst">&#123;store_key&#125;</span>:last_worker&quot;</span>])</span><br></pre></td></tr></table></figure>
+
+<p><strong>8 进程的 barrier 流程</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">进程 0: add(barrier_key, 1) → count=1, 等待</span><br><span class="line">进程 1: add(barrier_key, 1) → count=2, 等待</span><br><span class="line">进程 2: add(barrier_key, 1) → count=3, 等待</span><br><span class="line">进程 3: add(barrier_key, 1) → count=4, 等待</span><br><span class="line">进程 4: add(barrier_key, 1) → count=5, 等待</span><br><span class="line">进程 5: add(barrier_key, 1) → count=6, 等待</span><br><span class="line">进程 6: add(barrier_key, 1) → count=7, 等待</span><br><span class="line">进程 7: add(barrier_key, 1) → count=8, 最后一个！</span><br><span class="line">                → set(last_worker, &quot;1&quot;) → 其他进程被唤醒</span><br></pre></td></tr></table></figure>
+
+<h3 id="进程视角汇总"><a href="#进程视角汇总" class="headerlink" title="进程视角汇总"></a>进程视角汇总</h3><p>初始化完成后，每个进程的视角：</p>
+<table>
+<thead>
+<tr>
+<th>进程</th>
+<th>Server</th>
+<th>LOCAL_RANK</th>
+<th>RANK</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>Server 1</td>
+<td>0</td>
+<td>0</td>
+<td>master，监听端口</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Server 1</td>
+<td>1</td>
+<td>1</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Server 1</td>
+<td>2</td>
+<td>2</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Server 1</td>
+<td>3</td>
+<td>3</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Server 2</td>
+<td>0</td>
+<td>4</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Server 2</td>
+<td>1</td>
+<td>5</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Server 2</td>
+<td>2</td>
+<td>6</td>
+<td>worker，连接 master</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Server 2</td>
+<td>3</td>
+<td>7</td>
+<td>worker，连接 master</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="集合通信（Collective-Communication）"><a href="#集合通信（Collective-Communication）" class="headerlink" title="集合通信（Collective Communication）"></a>集合通信（Collective Communication）</h2><h3 id="AllReduce：跨-GPU-同步梯度"><a href="#AllReduce：跨-GPU-同步梯度" class="headerlink" title="AllReduce：跨 GPU 同步梯度"></a>AllReduce：跨 GPU 同步梯度</h3><p><a href="torch/distributed/distributed_c10d.py#L2979">torch&#x2F;distributed&#x2F;distributed_c10d.py:2979</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">all_reduce</span>(<span class="params">tensor, op=ReduceOp.SUM, group=<span class="literal">None</span>, async_op=<span class="literal">False</span></span>):</span><br><span class="line">    work = group.allreduce([tensor], opts)</span><br></pre></td></tr></table></figure>
+
+<p>梯度同步工作原理：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">进程 0: [1, 2]     进程 1: [3, 4]</span><br><span class="line">进程 2: [5, 6]     进程 3: [7, 8]</span><br><span class="line">                 ...</span><br><span class="line">进程 7: [15, 16]</span><br><span class="line">         │</span><br><span class="line">         └────────────── all_reduce ──────────────┘</span><br><span class="line">                               ↓ SUM</span><br><span class="line">         结果：[136, 272]  ← 所有进程看到相同结果</span><br></pre></td></tr></table></figure>
+
+<h3 id="Broadcast：从一个进程广播数据"><a href="#Broadcast：从一个进程广播数据" class="headerlink" title="Broadcast：从一个进程广播数据"></a>Broadcast：从一个进程广播数据</h3><p><a href="torch/distributed/distributed_c10d.py#L2927">torch&#x2F;distributed&#x2F;distributed_c10d.py:2927</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">broadcast</span>(<span class="params">tensor, src=<span class="literal">None</span>, group=<span class="literal">None</span></span>):</span><br><span class="line">    work = group.broadcast([tensor], opts)</span><br></pre></td></tr></table></figure>
+
+<h3 id="AllGather：收集所有进程的数据"><a href="#AllGather：收集所有进程的数据" class="headerlink" title="AllGather：收集所有进程的数据"></a>AllGather：收集所有进程的数据</h3><p><a href="torch/distributed/distributed_c10d.py#L3991">torch&#x2F;distributed&#x2F;distributed_c10d.py:3991</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">all_gather</span>(<span class="params">tensor_list, tensor, group=<span class="literal">None</span></span>):</span><br><span class="line">    work = group.allgather([tensor_list], [tensor], opts)</span><br></pre></td></tr></table></figure>
+
+<p>推理时用 AllGather 收集各 GPU 的结果。</p>
+<hr>
+<h2 id="DistributedDataParallel（DDP）"><a href="#DistributedDataParallel（DDP）" class="headerlink" title="DistributedDataParallel（DDP）"></a>DistributedDataParallel（DDP）</h2><h3 id="核心原理"><a href="#核心原理" class="headerlink" title="核心原理"></a>核心原理</h3><p><a href="torch/nn/parallel/distributed.py#L56-L97">torch&#x2F;nn&#x2F;parallel&#x2F;distributed.py:56-97</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">DistributedDataParallel</span>(<span class="title class_ inherited__">Module</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, module, ...</span>):</span><br><span class="line">        <span class="comment"># 为每个参数注册梯度 allreduce hook</span></span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> module.parameters():</span><br><span class="line">            p.register_post_accumulate_grad_hook(self._allreduce_hook)</span><br></pre></td></tr></table></figure>
+
+<h3 id="训练流程"><a href="#训练流程" class="headerlink" title="训练流程"></a>训练流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">1. 前向传播（各 GPU 独立计算）</span><br><span class="line">   GPU 0 (rank 0): loss = model(batch_0)</span><br><span class="line">   GPU 1 (rank 1): loss = model(batch_1)</span><br><span class="line">   ...</span><br><span class="line">   GPU 7 (rank 7): loss = model(batch_7)</span><br><span class="line"></span><br><span class="line">2. 计算梯度（各 GPU 独立）</span><br><span class="line">   GPU 0: loss.backward() → grad_0</span><br><span class="line">   GPU 1: loss.backward() → grad_1</span><br><span class="line">   ...</span><br><span class="line">   GPU 7: loss.backward() → grad_7</span><br><span class="line"></span><br><span class="line">3. 梯度同步（AllReduce SUM）</span><br><span class="line">   grad_final = AllReduce(grad_0, grad_1, ..., grad_7)</span><br><span class="line">   ───────────────────────────── 同步后各 GPU 梯度一致</span><br><span class="line"></span><br><span class="line">4. 参数更新（各 GPU 独立）</span><br><span class="line">   optimizer.step()</span><br></pre></td></tr></table></figure>
+
+<h3 id="梯度同步实现"><a href="#梯度同步实现" class="headerlink" title="梯度同步实现"></a>梯度同步实现</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">_allreduce_hook</span>(<span class="params">self, bucket</span>):</span><br><span class="line">    tensor = bucket.get_buffer()</span><br><span class="line">    dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=group)</span><br><span class="line">    <span class="keyword">return</span> bucket</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="设备网格（Device-Mesh）"><a href="#设备网格（Device-Mesh）" class="headerlink" title="设备网格（Device Mesh）"></a>设备网格（Device Mesh）</h2><h3 id="作用"><a href="#作用" class="headerlink" title="作用"></a>作用</h3><p><a href="torch/distributed/device_mesh.py#L151">torch&#x2F;distributed&#x2F;device_mesh.py:151</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">DeviceMesh</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, device_type, mesh</span>):</span><br><span class="line">        self.mesh = mesh  <span class="comment"># 2D array of ranks</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="用途：流水线并行"><a href="#用途：流水线并行" class="headerlink" title="用途：流水线并行"></a>用途：流水线并行</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 2x4 设备网格：2 个节点，每个节点 4 卡</span></span><br><span class="line">mesh = DeviceMesh(<span class="string">&quot;cuda&quot;</span>, torch.arange(<span class="number">8</span>).reshape(<span class="number">2</span>, <span class="number">4</span>))</span><br><span class="line"><span class="comment"># mesh = [[0, 1, 2, 3],</span></span><br><span class="line"><span class="comment">#         [4, 5, 6, 7]]</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 按行切分（数据并行）</span></span><br><span class="line">row_mesh = device_mesh[<span class="string">&quot;dp&quot;</span>]</span><br><span class="line"><span class="comment"># 按列切分（流水线并行）</span></span><br><span class="line">col_mesh = device_mesh[<span class="string">&quot;pp&quot;</span>]</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="分布式推理"><a href="#分布式推理" class="headerlink" title="分布式推理"></a>分布式推理</h2><h3 id="与训练的区别"><a href="#与训练的区别" class="headerlink" title="与训练的区别"></a>与训练的区别</h3><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>关注点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>训练</strong></td>
+<td>梯度同步、梯度 allreduce</td>
+</tr>
+<tr>
+<td><strong>推理</strong></td>
+<td>输入分发、结果收集</td>
+</tr>
+</tbody></table>
+<h3 id="输入分发"><a href="#输入分发" class="headerlink" title="输入分发"></a>输入分发</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 假设 batch_size=32，8 GPU</span></span><br><span class="line"><span class="comment"># 每个 GPU 处理 4 个样本</span></span><br><span class="line">input_slices = torch.chunk(<span class="built_in">input</span>, <span class="number">8</span>, dim=<span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<h3 id="结果收集"><a href="#结果收集" class="headerlink" title="结果收集"></a>结果收集</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 8 个 GPU 的结果收集</span></span><br><span class="line">output_list = [torch.empty_like(output) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">8</span>)]</span><br><span class="line">dist.all_gather(output_list, output, group=group)</span><br><span class="line">final_output = torch.cat(output_list, dim=<span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="实践建议"><a href="#实践建议" class="headerlink" title="实践建议"></a>实践建议</h2><h3 id="1-启动命令"><a href="#1-启动命令" class="headerlink" title="1. 启动命令"></a>1. 启动命令</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 多机 8 卡（2 台服务器，每台 4 卡）</span></span><br><span class="line">torchrun --nproc_per_node=4 --nnodes=2 trainer.py</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-分布式数据加载"><a href="#2-分布式数据加载" class="headerlink" title="2. 分布式数据加载"></a>2. 分布式数据加载</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> torch.utils.data.distributed <span class="keyword">import</span> DistributedSampler</span><br><span class="line"></span><br><span class="line">sampler = DistributedSampler(dataset, num_replicas=<span class="number">8</span>, rank=rank)</span><br><span class="line">loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-混合精度训练"><a href="#3-混合精度训练" class="headerlink" title="3. 混合精度训练"></a>3. 混合精度训练</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">model = DistributedDataParallel(model)</span><br><span class="line">model = model.to(torch.float16)</span><br><span class="line">scaler = GradScaler()</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>PyTorch 分布式训练的核心组件：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>ProcessGroup</strong></td>
+<td>管理进程间通信</td>
+</tr>
+<tr>
+<td><strong>NCCL&#x2F;GLOO</strong></td>
+<td>具体通信后端</td>
+</tr>
+<tr>
+<td><strong>Store</strong></td>
+<td>进程间协调（TCPStore）</td>
+</tr>
+<tr>
+<td><strong>AllReduce</strong></td>
+<td>梯度同步</td>
+</tr>
+<tr>
+<td><strong>DistributedDataParallel</strong></td>
+<td>数据并行封装</td>
+</tr>
+<tr>
+<td><strong>torchrun</strong></td>
+<td>分布式启动器</td>
+</tr>
+</tbody></table>
+<p><strong>完整流程</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">训练：</span><br><span class="line">  init_process_group → barrier 同步 → 前向 → 独立计算梯度 → AllReduce → 参数更新</span><br><span class="line"></span><br><span class="line">推理：</span><br><span class="line">  输入分发 → 各 GPU 独立推理 → AllGather 收集结果</span><br></pre></td></tr></table></figure>
+
+<p>理解这些概念后，你就可以构建跨服务器的大规模分布式训练和推理系统。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_6.1.pytorch-distributed-training/">http://example.com/2026/05/24/publish_6.1.pytorch-distributed-training/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_5.pytorch-inference-mode/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch inference mode
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_3.pytorch-library-structure/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch library structure
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

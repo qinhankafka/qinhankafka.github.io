@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch functionalization | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 函数化（Functionalization）：去除原地修改的艺术引言：什么是函数化？在 PyTorch 的代码库深处，隐藏着一个名为函数化（Functionalization）的关键过程。这里的”函数化”并非广义地将代码模块化为函数，而是特指一个核心转换：将包含原地修改（Mutation）的程序转换为纯函数形式。 这个转换是 PyTorch 内部多项关键功能的基石：  自动求导（A">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch functionalization">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_7.pytorch-functionalization/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 函数化（Functionalization）：去除原地修改的艺术引言：什么是函数化？在 PyTorch 的代码库深处，隐藏着一个名为函数化（Functionalization）的关键过程。这里的”函数化”并非广义地将代码模块化为函数，而是特指一个核心转换：将包含原地修改（Mutation）的程序转换为纯函数形式。 这个转换是 PyTorch 内部多项关键功能的基石：  自动求导（A">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.203Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch functionalization
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%80%E4%B9%88%E6%98%AF%E5%87%BD%E6%95%B0%E5%8C%96%EF%BC%9F"><span class="toc-text">引言：什么是函数化？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%87%BD%E6%95%B0%E5%8C%96%EF%BC%9F"><span class="toc-text">为什么需要函数化？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E5%8E%9F%E5%9C%B0%E4%BF%AE%E6%94%B9%E4%B8%8E%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E5%86%B2%E7%AA%81"><span class="toc-text">问题：原地修改与自动求导的冲突</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PyTorch-%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">PyTorch 的解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E7%9A%84%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6"><span class="toc-text">函数化的实现机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#FunctionalTensor%EF%BC%9APython-%E5%B1%82%E9%9D%A2%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E5%8C%85%E8%A3%85"><span class="toc-text">FunctionalTensor：Python 层面的函数化包装</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95%EF%BC%9Areplace-%E5%92%8C-commit-update"><span class="toc-text">核心方法：replace_ 和 commit_update</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E7%AE%A1%E7%90%86%EF%BC%9AFunctionalTensorMode"><span class="toc-text">模式管理：FunctionalTensorMode</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%AB%E5%90%8D%E9%97%AE%E9%A2%98%EF%BC%9A%E6%A0%B8%E5%BF%83%E6%8C%91%E6%88%98"><span class="toc-text">别名问题：核心挑战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%AB%E5%90%8D%E6%98%AF%E4%B8%AA%E9%9A%BE%E9%A2%98%EF%BC%9F"><span class="toc-text">为什么别名是个难题？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E5%8F%AF%E8%A1%8C%E7%9A%84%E6%96%B9%E6%A1%88%EF%BC%9A%E4%B8%BB%E5%8A%A8%E8%BF%BD%E8%B8%AA%E5%88%AB%E5%90%8D"><span class="toc-text">不可行的方案：主动追踪别名</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PyTorch-%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88%EF%BC%9A%E6%83%B0%E6%80%A7%E6%9B%B4%E6%96%B0"><span class="toc-text">PyTorch 的解决方案：惰性更新</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E6%9C%BA%E5%88%B6"><span class="toc-text">版本计数器机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E7%9A%84%E6%83%B0%E6%80%A7%E5%90%8C%E6%AD%A5"><span class="toc-text">视图的惰性同步</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%A4%BA%E4%BE%8B%EF%BC%9A%E7%89%88%E6%9C%AC%E5%8F%B7%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9C"><span class="toc-text">代码示例：版本号如何工作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E5%9C%A8-AOTAutograd-%E4%B8%AD%E7%9A%84%E8%A7%92%E8%89%B2"><span class="toc-text">函数化在 AOTAutograd 中的角色</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E4%B8%8E%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E7%BB%93%E5%90%88"><span class="toc-text">函数化与自动求导的结合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E8%A7%86%E5%9B%BE%E9%87%8D%E5%BB%BA"><span class="toc-text">检测视图重建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E4%B8%8E%E5%90%8E%E7%AB%AF%E9%9B%86%E6%88%90"><span class="toc-text">函数化与后端集成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA%EF%BC%9A%E7%BA%AF%E5%87%BD%E6%95%B0%E5%BC%8F%E5%90%8E%E7%AB%AF%E7%9A%84%E6%8C%91%E6%88%98"><span class="toc-text">XLA：纯函数式后端的挑战</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Torch-XLA-%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E6%96%B9%E6%A1%88"><span class="toc-text">Torch-XLA 的函数化方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%8B%E8%AF%95%E4%B8%AD%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E7%A4%BA%E4%BE%8B"><span class="toc-text">测试中的函数化示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%BD%E8%B8%AA%E5%90%8E%E7%9A%84%E8%AE%A1%E7%AE%97%E5%9B%BE"><span class="toc-text">追踪后的计算图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E6%9B%B4%E6%96%B0%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">惰性更新的优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B8%E6%AF%94%E4%B8%BB%E5%8A%A8%E6%9B%B4%E6%96%B0%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">相比主动更新的优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BC%96%E8%AF%91%E5%99%A8%E6%97%A0%E6%B3%95%E5%81%9A%E5%88%B0"><span class="toc-text">为什么编译器无法做到</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%80%E4%B9%88%E6%98%AF%E5%87%BD%E6%95%B0%E5%8C%96%EF%BC%9F"><span class="toc-text">引言：什么是函数化？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%87%BD%E6%95%B0%E5%8C%96%EF%BC%9F"><span class="toc-text">为什么需要函数化？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%EF%BC%9A%E5%8E%9F%E5%9C%B0%E4%BF%AE%E6%94%B9%E4%B8%8E%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E5%86%B2%E7%AA%81"><span class="toc-text">问题：原地修改与自动求导的冲突</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PyTorch-%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">PyTorch 的解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E7%9A%84%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6"><span class="toc-text">函数化的实现机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#FunctionalTensor%EF%BC%9APython-%E5%B1%82%E9%9D%A2%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E5%8C%85%E8%A3%85"><span class="toc-text">FunctionalTensor：Python 层面的函数化包装</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95%EF%BC%9Areplace-%E5%92%8C-commit-update"><span class="toc-text">核心方法：replace_ 和 commit_update</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E7%AE%A1%E7%90%86%EF%BC%9AFunctionalTensorMode"><span class="toc-text">模式管理：FunctionalTensorMode</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%AB%E5%90%8D%E9%97%AE%E9%A2%98%EF%BC%9A%E6%A0%B8%E5%BF%83%E6%8C%91%E6%88%98"><span class="toc-text">别名问题：核心挑战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%AB%E5%90%8D%E6%98%AF%E4%B8%AA%E9%9A%BE%E9%A2%98%EF%BC%9F"><span class="toc-text">为什么别名是个难题？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E5%8F%AF%E8%A1%8C%E7%9A%84%E6%96%B9%E6%A1%88%EF%BC%9A%E4%B8%BB%E5%8A%A8%E8%BF%BD%E8%B8%AA%E5%88%AB%E5%90%8D"><span class="toc-text">不可行的方案：主动追踪别名</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PyTorch-%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88%EF%BC%9A%E6%83%B0%E6%80%A7%E6%9B%B4%E6%96%B0"><span class="toc-text">PyTorch 的解决方案：惰性更新</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E6%9C%BA%E5%88%B6"><span class="toc-text">版本计数器机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E7%9A%84%E6%83%B0%E6%80%A7%E5%90%8C%E6%AD%A5"><span class="toc-text">视图的惰性同步</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%A4%BA%E4%BE%8B%EF%BC%9A%E7%89%88%E6%9C%AC%E5%8F%B7%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9C"><span class="toc-text">代码示例：版本号如何工作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E5%9C%A8-AOTAutograd-%E4%B8%AD%E7%9A%84%E8%A7%92%E8%89%B2"><span class="toc-text">函数化在 AOTAutograd 中的角色</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E4%B8%8E%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E7%BB%93%E5%90%88"><span class="toc-text">函数化与自动求导的结合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E8%A7%86%E5%9B%BE%E9%87%8D%E5%BB%BA"><span class="toc-text">检测视图重建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%8C%96%E4%B8%8E%E5%90%8E%E7%AB%AF%E9%9B%86%E6%88%90"><span class="toc-text">函数化与后端集成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA%EF%BC%9A%E7%BA%AF%E5%87%BD%E6%95%B0%E5%BC%8F%E5%90%8E%E7%AB%AF%E7%9A%84%E6%8C%91%E6%88%98"><span class="toc-text">XLA：纯函数式后端的挑战</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Torch-XLA-%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E6%96%B9%E6%A1%88"><span class="toc-text">Torch-XLA 的函数化方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%8B%E8%AF%95%E4%B8%AD%E7%9A%84%E5%87%BD%E6%95%B0%E5%8C%96%E7%A4%BA%E4%BE%8B"><span class="toc-text">测试中的函数化示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%BD%E8%B8%AA%E5%90%8E%E7%9A%84%E8%AE%A1%E7%AE%97%E5%9B%BE"><span class="toc-text">追踪后的计算图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E6%9B%B4%E6%96%B0%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">惰性更新的优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B8%E6%AF%94%E4%B8%BB%E5%8A%A8%E6%9B%B4%E6%96%B0%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-text">相比主动更新的优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BC%96%E8%AF%91%E5%99%A8%E6%97%A0%E6%B3%95%E5%81%9A%E5%88%B0"><span class="toc-text">为什么编译器无法做到</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-函数化（Functionalization）：去除原地修改的艺术"><a href="#PyTorch-函数化（Functionalization）：去除原地修改的艺术" class="headerlink" title="PyTorch 函数化（Functionalization）：去除原地修改的艺术"></a>PyTorch 函数化（Functionalization）：去除原地修改的艺术</h1><h2 id="引言：什么是函数化？"><a href="#引言：什么是函数化？" class="headerlink" title="引言：什么是函数化？"></a>引言：什么是函数化？</h2><p>在 PyTorch 的代码库深处，隐藏着一个名为<strong>函数化（Functionalization）</strong>的关键过程。这里的”函数化”并非广义地将代码模块化为函数，而是特指一个核心转换：<strong>将包含原地修改（Mutation）的程序转换为纯函数形式</strong>。</p>
+<p>这个转换是 PyTorch 内部多项关键功能的基石：</p>
+<ul>
+<li><strong>自动求导（Autograd）</strong>：原地修改与自动求导曾经水火不容</li>
+<li><strong>后端集成（如 XLA）</strong>：纯函数式后端无法直接处理原地修改</li>
+</ul>
+<p>理解函数化，你就能理解 PyTorch 如何在保持命令式编程（原地修改）便利性的同时，向内部提供一个纯函数的计算世界。</p>
+<hr>
+<h2 id="为什么需要函数化？"><a href="#为什么需要函数化？" class="headerlink" title="为什么需要函数化？"></a>为什么需要函数化？</h2><h3 id="问题：原地修改与自动求导的冲突"><a href="#问题：原地修改与自动求导的冲突" class="headerlink" title="问题：原地修改与自动求导的冲突"></a>问题：原地修改与自动求导的冲突</h3><p>在 PyTorch 0.4 之前的时代，自动求导机制和原地修改操作无法同时工作。原因在于：</p>
+<p>纯函数式程序的计算过程可以被轻松构建成自动求导图，反向传播时只需”重放”这个图即可。但如果引入原地修改，情况变得异常复杂：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">A = torch.tensor([<span class="number">1.</span>, <span class="number">2.</span>, <span class="number">3.</span>])</span><br><span class="line">V = A[<span class="number">1</span>:<span class="number">3</span>]  <span class="comment"># V 是 A 的视图，共享底层数据</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 如果执行原地修改</span></span><br><span class="line">A.add_(<span class="number">10</span>)  <span class="comment"># A 变为 [11., 12., 13.]</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># V 应该感知到这个变化，变成 [12., 13.]</span></span><br><span class="line"><span class="comment"># 这要求 PyTorch 追踪所有别名关系，并在每次原地修改时更新它们</span></span><br></pre></td></tr></table></figure>
+
+<p>追踪所有别名有两个致命问题：</p>
+<ol>
+<li><strong>内存泄漏</strong>：强引用列表阻止不再使用的视图被回收</li>
+<li><strong>性能开销</strong>：维护动态别名列表使张量大小不固定</li>
+</ol>
+<h3 id="PyTorch-的解决方案"><a href="#PyTorch-的解决方案" class="headerlink" title="PyTorch 的解决方案"></a>PyTorch 的解决方案</h3><p>PyTorch 在内部将你的程序转换为纯函数形式。autograd 记录的并非”这里发生了一个原地修改”，而是”这是一个等效的纯函数版本程序”。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用户写的代码（包含原地修改）</span></span><br><span class="line">x.add_(<span class="number">1</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># PyTorch 内部转换后的等效函数形式</span></span><br><span class="line">y = x + <span class="number">1</span></span><br><span class="line">x = y  <span class="comment"># 替代原地修改</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="函数化的实现机制"><a href="#函数化的实现机制" class="headerlink" title="函数化的实现机制"></a>函数化的实现机制</h2><h3 id="FunctionalTensor：Python-层面的函数化包装"><a href="#FunctionalTensor：Python-层面的函数化包装" class="headerlink" title="FunctionalTensor：Python 层面的函数化包装"></a>FunctionalTensor：Python 层面的函数化包装</h3><p><a href="torch/_subclasses/functional_tensor.py#L59-L71">torch&#x2F;_subclasses&#x2F;functional_tensor.py:59-71</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">FunctionalTensor</span>(torch.Tensor):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    Functional tensors represent tensors that will remove mutations</span></span><br><span class="line"><span class="string">    from a program. If you perform a mutable operation on a functional tensor,</span></span><br><span class="line"><span class="string">    it will re-dispatch to the functional variant of that operation.</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    Historically, functionalization is implemented in C++ in the dispatcher.</span></span><br><span class="line"><span class="string">    This class is a lightweight python shim around the C++ functionalization logic.</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>当对 FunctionalTensor 执行原地操作时，它会重新分派到函数的变体。</p>
+<h3 id="核心方法：replace-和-commit-update"><a href="#核心方法：replace-和-commit-update" class="headerlink" title="核心方法：replace_ 和 commit_update"></a>核心方法：replace_ 和 commit_update</h3><p><a href="torch/_subclasses/functional_tensor.py#L266-L273">torch&#x2F;_subclasses&#x2F;functional_tensor.py:266-273</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">replace_</span>(<span class="params">self, output: torch.Tensor</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    torch._functionalize_replace(self.elem, output)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">commit_update</span>(<span class="params">self</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    torch._functionalize_commit_update(self.elem)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">sync</span>(<span class="params">self</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    torch._functionalize_sync(self.elem)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>**replace_**：将输出替换到原张量，但不立即同步</li>
+<li><strong>commit_update</strong>：提交更新，使所有视图可见</li>
+<li><strong>sync</strong>：强制同步，等待所有更新完成</li>
+</ul>
+<h3 id="模式管理：FunctionalTensorMode"><a href="#模式管理：FunctionalTensorMode" class="headerlink" title="模式管理：FunctionalTensorMode"></a>模式管理：FunctionalTensorMode</h3><p><a href="torch/_subclasses/functional_tensor.py#L335-L349">torch&#x2F;_subclasses&#x2F;functional_tensor.py:335-349</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">FunctionalTensorMode</span>(<span class="title class_ inherited__">TorchDispatchMode</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params"></span></span><br><span class="line"><span class="params">        self,</span></span><br><span class="line"><span class="params">        pre_dispatch: <span class="built_in">bool</span> = <span class="literal">False</span>,</span></span><br><span class="line"><span class="params">        export: <span class="built_in">bool</span> = <span class="literal">False</span>,</span></span><br><span class="line"><span class="params">        _allow_token_discovery: <span class="built_in">bool</span> = <span class="literal">False</span>,</span></span><br><span class="line"><span class="params">    </span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        <span class="built_in">super</span>().__init__()</span><br><span class="line">        self.export = export</span><br><span class="line">        self._mode_key = torch._C._TorchDispatchModeKey.FUNCTIONAL</span><br><span class="line">        self.pre_dispatch = pre_dispatch</span><br></pre></td></tr></table></figure>
+
+<p>FunctionalTensorMode 是上下文管理器，在其作用域内，所有张量都会被转换为 FunctionalTensor。</p>
+<hr>
+<h2 id="别名问题：核心挑战"><a href="#别名问题：核心挑战" class="headerlink" title="别名问题：核心挑战"></a>别名问题：核心挑战</h2><h3 id="为什么别名是个难题？"><a href="#为什么别名是个难题？" class="headerlink" title="为什么别名是个难题？"></a>为什么别名是个难题？</h3><p>PyTorch 中，一个张量可以有多个视图（views），它们共享同一块底层数据：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">A = torch.arange(<span class="number">4.</span>)  <span class="comment"># tensor([0., 1., 2., 3.])</span></span><br><span class="line">V = A[<span class="number">1</span>:<span class="number">3</span>]             <span class="comment"># V 是 A 的视图，共享数据</span></span><br><span class="line">W = A[<span class="number">0</span>:<span class="number">2</span>]             <span class="comment"># W 也是 A 的视图</span></span><br></pre></td></tr></table></figure>
+
+<p>当对基础张量 A 执行 <code>fill_(1)</code> 时，所有视图 V 和 W 都必须感知到这个变化。</p>
+<h3 id="不可行的方案：主动追踪别名"><a href="#不可行的方案：主动追踪别名" class="headerlink" title="不可行的方案：主动追踪别名"></a>不可行的方案：主动追踪别名</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 不可行：维护所有别名的列表</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Tensor</span>:</span><br><span class="line">    aliases: <span class="built_in">list</span>[Tensor]  <span class="comment"># 追踪所有别名</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">fill_</span>(<span class="params">self, value</span>):</span><br><span class="line">        <span class="keyword">for</span> alias <span class="keyword">in</span> self.aliases:</span><br><span class="line">            alias.data = ...  <span class="comment"># 逐一更新</span></span><br><span class="line">        <span class="comment"># 问题：内存泄漏、性能开销</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>强引用导致内存泄漏</strong>：即使某个视图已不再使用，也无法被回收。</p>
+<p><strong>维护别名列表开销巨大</strong>：张量大小不再固定，与 PyTorch 高性能设计哲学相悖。</p>
+<hr>
+<h2 id="PyTorch-的解决方案：惰性更新"><a href="#PyTorch-的解决方案：惰性更新" class="headerlink" title="PyTorch 的解决方案：惰性更新"></a>PyTorch 的解决方案：惰性更新</h2><h3 id="核心思想"><a href="#核心思想" class="headerlink" title="核心思想"></a>核心思想</h3><p>PyTorch 的设计者 Sam Gross 提出了一个优雅的方案：<strong>如果不能立即处理，那就推迟处理（do it later）</strong>。</p>
+<h3 id="版本计数器机制"><a href="#版本计数器机制" class="headerlink" title="版本计数器机制"></a>版本计数器机制</h3><p>每个张量都有一个内部版本计数器。当对基础张量进行原地修改时：</p>
+<ol>
+<li>执行修改操作</li>
+<li>版本号加一（通过 <code>bump()</code>）</li>
+</ol>
+<p><a href="torch/csrc/autograd/variable.cpp#L796-L802">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.cpp:796-802</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 当在推理模式下创建的视图被修改时，报错</span></span><br><span class="line"><span class="keyword">if</span> (creation_meta == CreationMeta::INFERENCE_MODE) &#123;</span><br><span class="line">  msg = c10::<span class="built_in">str</span>(</span><br><span class="line">      prefix,</span><br><span class="line">      <span class="string">&quot; inference mode and &quot;</span>,</span><br><span class="line">      modified_obj,</span><br><span class="line">      <span class="string">&quot; modified inplace in normal mode.&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="视图的惰性同步"><a href="#视图的惰性同步" class="headerlink" title="视图的惰性同步"></a>视图的惰性同步</h3><p>当视图被访问时：</p>
+<ol>
+<li>视图记录创建时基础张量的版本号</li>
+<li>访问时比较记录的版本号与基础张量当前版本号</li>
+<li>如果版本号不一致，重新基于更新后的基础张量计算视图状态</li>
+</ol>
+<hr>
+<h2 id="代码示例：版本号如何工作"><a href="#代码示例：版本号如何工作" class="headerlink" title="代码示例：版本号如何工作"></a>代码示例：版本号如何工作</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="comment"># 1. 创建基础张量 A 和视图 V</span></span><br><span class="line">A = torch.arange(<span class="number">4.</span>)  <span class="comment"># tensor([0., 1., 2., 3.])</span></span><br><span class="line">                        <span class="comment"># 假设 A 的初始版本号为 0</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># V 是 A 的视图，共享数据。V 会记录下 A 的版本号 0</span></span><br><span class="line">V = A[<span class="number">1</span>:<span class="number">3</span>]           <span class="comment"># tensor([1., 2.])</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;创建视图后, V = <span class="subst">&#123;V&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. 对基础张量 A 进行原地修改</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;对 A 执行 A.add_(10)...&quot;</span>)</span><br><span class="line">A.add_(<span class="number">10</span>)           <span class="comment"># A 的内容变为 [10., 11., 12., 13.]</span></span><br><span class="line">                     <span class="comment"># 同时，A 的版本号从 0 变为 1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. 再次访问视图 V</span></span><br><span class="line"><span class="comment"># 在访问前，PyTorch 内部会检查：</span></span><br><span class="line"><span class="comment"># V 记录的版本号 (0) != A 的当前版本号 (1) -&gt; V 已过期！</span></span><br><span class="line"><span class="comment"># 此时，PyTorch 会基于更新后的 A 和 V 的元信息（偏移、步长等）重新计算 V</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;再次访问时, V = <span class="subst">&#123;V&#125;</span>&quot;</span>)  <span class="comment"># 输出: tensor([11., 12.])</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;修改后的 A = <span class="subst">&#123;A&#125;</span>&quot;</span>)  <span class="comment"># 输出: tensor([10., 11., 12., 13.])</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="函数化在-AOTAutograd-中的角色"><a href="#函数化在-AOTAutograd-中的角色" class="headerlink" title="函数化在 AOTAutograd 中的角色"></a>函数化在 AOTAutograd 中的角色</h2><h3 id="函数化与自动求导的结合"><a href="#函数化与自动求导的结合" class="headerlink" title="函数化与自动求导的结合"></a>函数化与自动求导的结合</h3><p><a href="torch/_functorch/_aot_autograd/functional_utils.py#L1-L9">torch&#x2F;_functorch&#x2F;_aot_autograd&#x2F;functional_utils.py:1-9</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">This file contains utilities related to functionalization in AOTAutograd:</span></span><br><span class="line"><span class="string">1. converting to/from functional tensors</span></span><br><span class="line"><span class="string">2. detecting Tensor mutations - both metadata and Tensor value</span></span><br><span class="line"><span class="string">3. regenerating/replaying views from their base</span></span><br><span class="line"><span class="string">4. checking if a graph is functional i.e. whether it contains any mutation ops</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>AOTAutograd 使用函数化来处理编译时的梯度计算。它在追踪（tracing）阶段将所有原地操作转换为纯函数形式，然后在生成的计算图中安全地处理它们。</p>
+<h3 id="检测视图重建"><a href="#检测视图重建" class="headerlink" title="检测视图重建"></a>检测视图重建</h3><p><a href="torch/_functorch/_aot_autograd/functional_utils.py#L48-L55">torch&#x2F;_functorch&#x2F;_aot_autograd&#x2F;functional_utils.py:48-55</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">sync_functional_tensor</span>(<span class="params">t: torch.Tensor</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="keyword">if</span> is_traceable_wrapper_subclass(t):</span><br><span class="line">        attrs, _ctx = t.__tensor_flatten__()</span><br><span class="line">        <span class="keyword">for</span> attr <span class="keyword">in</span> attrs:</span><br><span class="line">            sync_functional_tensor(<span class="built_in">getattr</span>(t, attr))</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        torch._sync(t)</span><br></pre></td></tr></table></figure>
+
+<p>当需要从函数化张量获取结果时，<code>sync_functional_tensor</code> 会同步所有更新。</p>
+<hr>
+<h2 id="函数化与后端集成"><a href="#函数化与后端集成" class="headerlink" title="函数化与后端集成"></a>函数化与后端集成</h2><h3 id="XLA：纯函数式后端的挑战"><a href="#XLA：纯函数式后端的挑战" class="headerlink" title="XLA：纯函数式后端的挑战"></a>XLA：纯函数式后端的挑战</h3><p>XLA（Accelerated Linear Algebra）是 TensorFlow、JAX 等框架使用的高性能编译器后端，它的核心特点是<strong>纯函数式，不支持原地修改</strong>。</p>
+<p>当需要将包含原地修改的 PyTorch 程序转换为 XLA 的 HLO IR 时，必须先消除所有修改。</p>
+<h3 id="Torch-XLA-的函数化方案"><a href="#Torch-XLA-的函数化方案" class="headerlink" title="Torch-XLA 的函数化方案"></a>Torch-XLA 的函数化方案</h3><p>Torch-XLA 扩展利用了与 autograd 类似的函数化机制：</p>
+<ol>
+<li>在执行前将所有原地操作转换为纯函数形式</li>
+<li>通过 <code>torch._to_functional_tensor</code> 将普通张量转换为 FunctionalTensor</li>
+<li>在 <code>FunctionalTensorMode</code> 上下文中执行所有操作</li>
+<li>最后将结果同步回普通张量</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># XLA 集成中的函数化使用</span></span><br><span class="line">func_t = torch._to_functional_tensor(t)</span><br><span class="line">torch._enable_functionalization(reapply_views=<span class="literal">True</span>)</span><br><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    out = model(func_t)</span><br><span class="line"><span class="keyword">finally</span>:</span><br><span class="line">    torch._disable_functionalization()</span><br><span class="line"><span class="comment"># 同步结果回原张量</span></span><br><span class="line">torch._sync(func_t)</span><br><span class="line">result = torch._from_functional_tensor(func_t)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="测试中的函数化示例"><a href="#测试中的函数化示例" class="headerlink" title="测试中的函数化示例"></a>测试中的函数化示例</h2><p><a href="test/test_functionalization.py#L160-L171">test&#x2F;test_functionalization.py:160-171</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">test_multiple_views_of_same_base</span>(<span class="params">self</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">f</span>(<span class="params">x</span>):</span><br><span class="line">        y = x.view(-<span class="number">1</span>)</span><br><span class="line">        z = x.view(-<span class="number">1</span>)</span><br><span class="line">        x.add_(<span class="number">1</span>)</span><br><span class="line">        <span class="comment"># y should have been updated.</span></span><br><span class="line">        y2 = y + <span class="number">1</span></span><br><span class="line">        <span class="comment"># z should have been updated too.</span></span><br><span class="line">        z2 = z + <span class="number">1</span></span><br><span class="line">        <span class="keyword">return</span> z2</span><br><span class="line"></span><br><span class="line">    self.assert_functionalization(f, torch.ones(<span class="number">4</span>))</span><br></pre></td></tr></table></figure>
+
+<p>测试验证了函数化的核心保证：<strong>当基础张量被原地修改时，所有视图都应该感知到变化</strong>。</p>
+<h3 id="追踪后的计算图"><a href="#追踪后的计算图" class="headerlink" title="追踪后的计算图"></a>追踪后的计算图</h3><p>函数化后的计算图会将原地操作转换为显式的复制操作：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 原始代码</span></span><br><span class="line">x.add_(<span class="number">1</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 函数化后的等价计算图</span></span><br><span class="line">view_copy = torch.ops.aten.view_copy.default(x, [<span class="number">4</span>])</span><br><span class="line">add = torch.ops.aten.add.Tensor(view_copy, one)</span><br><span class="line">copy_ = torch.ops.aten.copy_.default(x, add)  <span class="comment"># 显式复制替代原地修改</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="惰性更新的优势"><a href="#惰性更新的优势" class="headerlink" title="惰性更新的优势"></a>惰性更新的优势</h2><h3 id="相比主动更新的优势"><a href="#相比主动更新的优势" class="headerlink" title="相比主动更新的优势"></a>相比主动更新的优势</h3><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>主动更新</th>
+<th>惰性更新（PyTorch）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>更新时机</strong></td>
+<td>原地修改时立即更新所有视图</td>
+<td>视图被访问时才检查</td>
+</tr>
+<tr>
+<td><strong>内存开销</strong></td>
+<td>维护别名列表，内存开销大</td>
+<td>无额外内存开销</td>
+</tr>
+<tr>
+<td><strong>时间开销</strong></td>
+<td>每次修改都要遍历所有视图</td>
+<td>修改时只需增加版本号</td>
+</tr>
+<tr>
+<td><strong>实现复杂度</strong></td>
+<td>需要在修改时处理所有别名</td>
+<td>只在访问时按需计算</td>
+</tr>
+</tbody></table>
+<h3 id="为什么编译器无法做到"><a href="#为什么编译器无法做到" class="headerlink" title="为什么编译器无法做到"></a>为什么编译器无法做到</h3><p>静态编译器（如 XLA）在编译时无法确定别名关系，因为：</p>
+<ul>
+<li>视图可能在运行时动态创建</li>
+<li>别名关系取决于实际执行路径</li>
+<li>保守的假设会限制优化空间</li>
+</ul>
+<p>PyTorch 在执行每一行代码时，都拥有关于别名关系的<strong>精确信息</strong>，这是静态分析无法获得的。</p>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>函数化是 PyTorch 内部一项精妙的设计：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>FunctionalTensor</strong></td>
+<td>Python 层面的函数化张量包装</td>
+</tr>
+<tr>
+<td><strong>FunctionalTensorMode</strong></td>
+<td>上下文管理器，将普通张量转换为 FunctionalTensor</td>
+</tr>
+<tr>
+<td><strong>replace_ &#x2F; commit_update</strong></td>
+<td>管理视图同步的时机</td>
+</tr>
+<tr>
+<td><strong>版本计数器</strong></td>
+<td>追踪基础张量的修改，实现惰性更新</td>
+</tr>
+</tbody></table>
+<p><strong>函数化的核心保证</strong>：</p>
+<ul>
+<li>用户享受命令式编程（原地修改）的便利</li>
+<li>内部将其无缝转换为纯函数式表达</li>
+<li>为自动求导和后端编译提供统一、干净的接口</li>
+</ul>
+<p>这种在运行时进行函数化的方式，相比静态编译器具有天然优势——PyTorch 拥有关于别名关系的精确信息，而编译器只能做出保守的假设。</p>
+<p>最终，PyTorch 通过这个机制，巧妙地将原地修改的复杂性”封装”起来，向内提供一个纯函数的世界，向外则展现了一个灵活易用的编程模型。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_7.pytorch-functionalization/">http://example.com/2026/05/24/publish_7.pytorch-functionalization/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch structured kernel meta tensor
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_cas/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            cas
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch library structure | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 内部库结构：为什么需要这么多动态库？引言：你看到的只是冰山一角当你写下这行代码时： 12import torcht &#x3D; torch.tensor([1.0, 2.0, 3.0])  PyTorch 似乎是一个单一、整体的库。但在这句简单的命令背后，PyTorch 的内部世界远比表面看起来要复杂。 如果你尝试为 PyTorch 贡献代码，可能会发现一个让人困惑的现象：源码中有 ate">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch library structure">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_3.pytorch-library-structure/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 内部库结构：为什么需要这么多动态库？引言：你看到的只是冰山一角当你写下这行代码时： 12import torcht &#x3D; torch.tensor([1.0, 2.0, 3.0])  PyTorch 似乎是一个单一、整体的库。但在这句简单的命令背后，PyTorch 的内部世界远比表面看起来要复杂。 如果你尝试为 PyTorch 贡献代码，可能会发现一个让人困惑的现象：源码中有 ate">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.184Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch library structure
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BD%A0%E7%9C%8B%E5%88%B0%E7%9A%84%E5%8F%AA%E6%98%AF%E5%86%B0%E5%B1%B1%E4%B8%80%E8%A7%92"><span class="toc-text">引言：你看到的只是冰山一角</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%B8%80%EF%BC%9A%E9%9A%94%E7%A6%BB%E4%B8%BB%E8%A6%81%E4%BE%9D%E8%B5%96%E9%A1%B9"><span class="toc-text">原则一：隔离主要依赖项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CUDA-%E4%BE%9D%E8%B5%96%E7%9A%84%E9%9A%94%E7%A6%BB"><span class="toc-text">CUDA 依赖的隔离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%AE%89%E8%A3%85-CPU-%E7%89%88%E6%9C%AC"><span class="toc-text">源码安装 CPU 版本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Python-%E4%BE%9D%E8%B5%96%E7%9A%84%E9%9A%94%E7%A6%BB"><span class="toc-text">Python 依赖的隔离</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%BA%8C%EF%BC%9A%E6%8C%89%E9%9C%80%E4%BD%BF%E7%94%A8%EF%BC%8C%E4%BC%98%E5%8C%96%E4%BA%8C%E8%BF%9B%E5%88%B6%E5%A4%A7%E5%B0%8F"><span class="toc-text">原则二：按需使用，优化二进制大小</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3-1"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ATen-vs-libtorch%EF%BC%9A%E5%9F%BA%E7%A1%80%E8%AE%A1%E7%AE%97%E4%B8%8E%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E7%9A%84%E5%88%86%E7%A6%BB"><span class="toc-text">ATen vs. libtorch：基础计算与神经网络的分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ATen-core-vs-ATen%EF%BC%9A%E7%A7%BB%E5%8A%A8%E7%AB%AF%E6%9C%80%E5%B0%8F%E6%A0%B8%E5%BF%83%E9%9B%86"><span class="toc-text">ATen&#x2F;core vs. ATen：移动端最小核心集</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%B8%89%EF%BC%9A%E5%BA%94%E5%AF%B9%E6%A3%98%E6%89%8B%E7%9A%84%E6%8A%80%E6%9C%AF%E9%99%90%E5%88%B6"><span class="toc-text">原则三：应对棘手的技术限制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Windows-DLL-%E7%9A%84-65k-%E7%AC%A6%E5%8F%B7%E9%99%90%E5%88%B6"><span class="toc-text">Windows DLL 的 65k 符号限制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A7%BB%E5%8A%A8%E7%AB%AF%E9%80%89%E6%8B%A9%E6%80%A7%E7%BC%96%E8%AF%91"><span class="toc-text">移动端选择性编译</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E4%BE%8B%EF%BC%9A%E6%9E%84%E5%BB%BA%E8%BD%BB%E9%87%8F%E7%BA%A7%E5%B7%A5%E4%B8%9A%E7%9B%B8%E6%9C%BA%E5%BA%94%E7%94%A8"><span class="toc-text">实例：构建轻量级工业相机应用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BD%A0%E7%9C%8B%E5%88%B0%E7%9A%84%E5%8F%AA%E6%98%AF%E5%86%B0%E5%B1%B1%E4%B8%80%E8%A7%92"><span class="toc-text">引言：你看到的只是冰山一角</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%B8%80%EF%BC%9A%E9%9A%94%E7%A6%BB%E4%B8%BB%E8%A6%81%E4%BE%9D%E8%B5%96%E9%A1%B9"><span class="toc-text">原则一：隔离主要依赖项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CUDA-%E4%BE%9D%E8%B5%96%E7%9A%84%E9%9A%94%E7%A6%BB"><span class="toc-text">CUDA 依赖的隔离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%AE%89%E8%A3%85-CPU-%E7%89%88%E6%9C%AC"><span class="toc-text">源码安装 CPU 版本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Python-%E4%BE%9D%E8%B5%96%E7%9A%84%E9%9A%94%E7%A6%BB"><span class="toc-text">Python 依赖的隔离</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%BA%8C%EF%BC%9A%E6%8C%89%E9%9C%80%E4%BD%BF%E7%94%A8%EF%BC%8C%E4%BC%98%E5%8C%96%E4%BA%8C%E8%BF%9B%E5%88%B6%E5%A4%A7%E5%B0%8F"><span class="toc-text">原则二：按需使用，优化二进制大小</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3-1"><span class="toc-text">核心思想</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ATen-vs-libtorch%EF%BC%9A%E5%9F%BA%E7%A1%80%E8%AE%A1%E7%AE%97%E4%B8%8E%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E7%9A%84%E5%88%86%E7%A6%BB"><span class="toc-text">ATen vs. libtorch：基础计算与神经网络的分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ATen-core-vs-ATen%EF%BC%9A%E7%A7%BB%E5%8A%A8%E7%AB%AF%E6%9C%80%E5%B0%8F%E6%A0%B8%E5%BF%83%E9%9B%86"><span class="toc-text">ATen&#x2F;core vs. ATen：移动端最小核心集</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E5%88%99%E4%B8%89%EF%BC%9A%E5%BA%94%E5%AF%B9%E6%A3%98%E6%89%8B%E7%9A%84%E6%8A%80%E6%9C%AF%E9%99%90%E5%88%B6"><span class="toc-text">原则三：应对棘手的技术限制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Windows-DLL-%E7%9A%84-65k-%E7%AC%A6%E5%8F%B7%E9%99%90%E5%88%B6"><span class="toc-text">Windows DLL 的 65k 符号限制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A7%BB%E5%8A%A8%E7%AB%AF%E9%80%89%E6%8B%A9%E6%80%A7%E7%BC%96%E8%AF%91"><span class="toc-text">移动端选择性编译</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E4%BE%8B%EF%BC%9A%E6%9E%84%E5%BB%BA%E8%BD%BB%E9%87%8F%E7%BA%A7%E5%B7%A5%E4%B8%9A%E7%9B%B8%E6%9C%BA%E5%BA%94%E7%94%A8"><span class="toc-text">实例：构建轻量级工业相机应用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-内部库结构：为什么需要这么多动态库？"><a href="#PyTorch-内部库结构：为什么需要这么多动态库？" class="headerlink" title="PyTorch 内部库结构：为什么需要这么多动态库？"></a>PyTorch 内部库结构：为什么需要这么多动态库？</h1><h2 id="引言：你看到的只是冰山一角"><a href="#引言：你看到的只是冰山一角" class="headerlink" title="引言：你看到的只是冰山一角"></a>引言：你看到的只是冰山一角</h2><p>当你写下这行代码时：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line">t = torch.tensor([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br></pre></td></tr></table></figure>
+
+<p>PyTorch 似乎是一个单一、整体的库。但在这句简单的命令背后，PyTorch 的内部世界远比表面看起来要复杂。</p>
+<p>如果你尝试为 PyTorch 贡献代码，可能会发现一个让人困惑的现象：源码中有 <code>aten</code>、<code>c10</code>、<code>libtorch</code>、<code>torch_python</code> 等众多库——光是搞清楚它们之间的关系，就让人头晕不已。</p>
+<p>为什么要这样设计？</p>
+<hr>
+<h2 id="原则一：隔离主要依赖项"><a href="#原则一：隔离主要依赖项" class="headerlink" title="原则一：隔离主要依赖项"></a>原则一：隔离主要依赖项</h2><h3 id="核心思想"><a href="#核心思想" class="headerlink" title="核心思想"></a>核心思想</h3><p>为每一个大型、可选的外部依赖创建一个独立的库，使 PyTorch 可以根据不同使用环境灵活地”穿上”或”脱下”某些重型功能。</p>
+<h3 id="CUDA-依赖的隔离"><a href="#CUDA-依赖的隔离" class="headerlink" title="CUDA 依赖的隔离"></a>CUDA 依赖的隔离</h3><p>CUDA 是一个庞大的依赖项，与 NVIDIA GPU 硬件深度绑定。但并非所有用户都拥有或需要 GPU。</p>
+<p>PyTorch 通过将代码拆分为 <code>aten_cpu</code> 和 <code>aten_cuda</code> 两个库来实现这一点：</p>
+<p><a href="BUILD.bazel#L231-L264">BUILD.bazel:231-264</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">filegroup(</span><br><span class="line">    name = <span class="string">&quot;aten_cuda_cpp_srcs&quot;</span>,</span><br><span class="line">    srcs = glob([</span><br><span class="line">        <span class="string">&quot;aten/src/ATen/cuda/*.cpp&quot;</span>,</span><br><span class="line">        <span class="string">&quot;aten/src/ATen/cuda/detail/*.cpp&quot;</span>,</span><br><span class="line">        ...</span><br><span class="line">    ]),</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">filegroup(</span><br><span class="line">    name = <span class="string">&quot;aten_cu_srcs&quot;</span>,</span><br><span class="line">    srcs = glob([</span><br><span class="line">        <span class="string">&quot;aten/src/ATen/cuda/*.cu&quot;</span>,</span><br><span class="line">        <span class="string">&quot;aten/src/ATen/cuda/detail/*.cu&quot;</span>,</span><br><span class="line">        ...</span><br><span class="line">    ]),</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p><a href="BUILD.bazel#L419-L457">BUILD.bazel:419-457</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">cc_library(</span><br><span class="line">    name = <span class="string">&quot;aten_cuda_cpp&quot;</span>,</span><br><span class="line">    srcs = [<span class="string">&quot;:aten_cuda_cpp_srcs&quot;</span>],</span><br><span class="line">    deps = [<span class="string">&quot;:aten&quot;</span>, <span class="string">&quot;@cuda&quot;</span>, <span class="string">&quot;@cuda//:cusolver&quot;</span>, ...],</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">cu_library(</span><br><span class="line">    name = <span class="string">&quot;aten_cuda&quot;</span>,</span><br><span class="line">    srcs = [<span class="string">&quot;:aten_cu_srcs&quot;</span>],</span><br><span class="line">    deps = [<span class="string">&quot;:aten_cuda_cpp&quot;</span>, <span class="string">&quot;@cuda//:cublas&quot;</span>, ...],</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>当用户安装纯 CPU 版本时，构建系统可以完全跳过 <code>aten_cuda</code> 及其所有依赖。</p>
+<h3 id="源码安装-CPU-版本"><a href="#源码安装-CPU-版本" class="headerlink" title="源码安装 CPU 版本"></a>源码安装 CPU 版本</h3><p>从源码构建时，通过 CMake 选项控制：</p>
+<table>
+<thead>
+<tr>
+<th>CMake 选项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>USE_CUDA=OFF</code></td>
+<td>禁用 CUDA，不编译 GPU 相关代码</td>
+</tr>
+<tr>
+<td><code>USE_XPU=OFF</code></td>
+<td>禁用 Intel XPU</td>
+</tr>
+<tr>
+<td><code>USE_ROCM=OFF</code></td>
+<td>禁用 AMD ROCm</td>
+</tr>
+<tr>
+<td><code>USE_CUDNN=OFF</code></td>
+<td>禁用 cuDNN</td>
+</tr>
+</tbody></table>
+<p><a href="CMakeLists.txt#L249-L255">CMakeLists.txt:249-255</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">option</span>(USE_CUDA <span class="string">&quot;Use CUDA&quot;</span> <span class="keyword">ON</span>)</span><br><span class="line"><span class="keyword">option</span>(USE_XPU <span class="string">&quot;Use XPU&quot;</span> <span class="keyword">ON</span>)</span><br><span class="line"><span class="keyword">option</span>(USE_ROCM <span class="string">&quot;Use ROCm&quot;</span> <span class="keyword">ON</span>)</span><br></pre></td></tr></table></figure>
+
+<p>构建命令示例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># CPU only 构建</span></span><br><span class="line">cmake .. -DUSE_CUDA=OFF -DUSE_XPU=OFF -DUSE_ROCM=OFF -DBUILD_TEST=OFF</span><br><span class="line">pip install -e . -v --no-build-isolation</span><br></pre></td></tr></table></figure>
+
+<p><strong>选择性编译算子</strong>：如果只需要特定算子，可以配合 <code>SELECTED_OP_LIST</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake .. -DUSE_CUDA=OFF -DSELECTED_OP_LIST=/path/to/operators.yaml</span><br></pre></td></tr></table></figure>
+
+<p>这样只会编译和打包用到的算子，显著减小二进制体积。</p>
+<h3 id="Python-依赖的隔离"><a href="#Python-依赖的隔离" class="headerlink" title="Python 依赖的隔离"></a>Python 依赖的隔离</h3><p>PyTorch 的核心是 C++，但前端是 Python。有些场景需要纯 C++ 环境（服务器部署、嵌入式设备）。</p>
+<p><a href="torch/CMakeLists.txt#L317-L345">torch&#x2F;CMakeLists.txt:317-345</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(torch_python SHARED <span class="variable">$&#123;TORCH_PYTHON_SRCS&#125;</span>)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(torch_python PRIVATE Python::NumPy)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># BUILD.bazel:818-821</span></span><br><span class="line">name = <span class="string">&quot;torch_python&quot;</span>,</span><br><span class="line">srcs = libtorch_python_core_sources + ...,</span><br></pre></td></tr></table></figure>
+
+<p>这样 C++ 应用程序可以只链接 <code>libtorch</code>，创建不依赖 Python 解释器的独立程序。</p>
+<hr>
+<h2 id="原则二：按需使用，优化二进制大小"><a href="#原则二：按需使用，优化二进制大小" class="headerlink" title="原则二：按需使用，优化二进制大小"></a>原则二：按需使用，优化二进制大小</h2><h3 id="核心思想-1"><a href="#核心思想-1" class="headerlink" title="核心思想"></a>核心思想</h3><p>将不同层次的功能拆分开，让用户只链接他们需要的部分。</p>
+<h3 id="ATen-vs-libtorch：基础计算与神经网络的分离"><a href="#ATen-vs-libtorch：基础计算与神经网络的分离" class="headerlink" title="ATen vs. libtorch：基础计算与神经网络的分离"></a>ATen vs. libtorch：基础计算与神经网络的分离</h3><p>ATen (A Tensor Library) 提供张量数学运算（加法、乘法等），但不关心神经网络或自动求导。</p>
+<p>libtorch 在 ATen 之上构建，包含自动求导引擎、<code>nn::Module</code> 等功能。</p>
+<p><a href="aten/src/ATen/CMakeLists.txt#L960-L963">aten&#x2F;src&#x2F;ATen&#x2F;CMakeLists.txt:960-963</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">install</span>(DIRECTORY <span class="variable">$&#123;CMAKE_CURRENT_LIST_DIR&#125;</span>/../aten/src/ATen/core</span><br><span class="line">    DESTINATION <span class="variable">$&#123;AT_INSTALL_INCLUDE_DIR&#125;</span>/ATen/core)</span><br></pre></td></tr></table></figure>
+
+<p>如果你只需要张量计算，可以只依赖 ATen，避免链接庞大的自动求导和神经网络代码。</p>
+<h3 id="ATen-core-vs-ATen：移动端最小核心集"><a href="#ATen-core-vs-ATen：移动端最小核心集" class="headerlink" title="ATen&#x2F;core vs. ATen：移动端最小核心集"></a>ATen&#x2F;core vs. ATen：移动端最小核心集</h3><p>项目早期，为了将 PyTorch 移植到移动端，需要一个功能极简、体积超小的核心库。</p>
+<p><a href="BUILD.bazel#L99-L155">BUILD.bazel:99-155</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;aten/src/ATen/core/aten_interned_strings.h&quot;</span>,</span><br><span class="line"><span class="string">&quot;aten/src/ATen/core/enum_tag.h&quot;</span>,</span><br><span class="line"><span class="string">&quot;aten/src/ATen/core/TensorBody.h&quot;</span>,</span><br><span class="line"><span class="string">&quot;aten/src/ATen/core/TensorMethods.cpp&quot;</span>,</span><br><span class="line"><span class="string">&quot;aten/src/ATen/core/**/*.cpp&quot;</span>,</span><br></pre></td></tr></table></figure>
+
+<p><code>ATen/core</code> 只包含移动端场景所必需的最核心功能。</p>
+<hr>
+<h2 id="原则三：应对棘手的技术限制"><a href="#原则三：应对棘手的技术限制" class="headerlink" title="原则三：应对棘手的技术限制"></a>原则三：应对棘手的技术限制</h2><h3 id="Windows-DLL-的-65k-符号限制"><a href="#Windows-DLL-的-65k-符号限制" class="headerlink" title="Windows DLL 的 65k 符号限制"></a>Windows DLL 的 65k 符号限制</h3><p>在 Windows 上，一个 DLL 最多只能导出约 65,000 个公共符号。</p>
+<p><a href="torch/headeronly/macros/Export.h#L90-L143">torch&#x2F;headeronly&#x2F;macros&#x2F;Export.h:90-143</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CAFFE2_BUILD_MAIN_LIB</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> TORCH_API C10_EXPORT</span></span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> TORCH_API C10_IMPORT</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> C10_BUILD_MAIN_LIB</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> C10_API C10_EXPORT</span></span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> C10_API C10_IMPORT</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>Windows 上，<code>C10_EXPORT</code> 和 <code>C10_IMPORT</code> 分别是 <code>__declspec(dllexport)</code> 和 <code>__declspec(dllimport)</code>。</p>
+<p>通过将代码分散到多个库中，确保每个 DLL 都符合 Windows 的限制。<strong>可以说，在 Windows 平台上，如果不拆分库，PyTorch 将无法发布。</strong></p>
+<hr>
+<h2 id="移动端选择性编译"><a href="#移动端选择性编译" class="headerlink" title="移动端选择性编译"></a>移动端选择性编译</h2><p>移动应用对体积极为敏感。一个模型可能只用到了 PyTorch 数百个算子中的十几个。</p>
+<p><a href="CMakeLists.txt#L689-L722">CMakeLists.txt:689-722</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(ANDROID <span class="keyword">OR</span> IOS <span class="keyword">OR</span> <span class="keyword">DEFINED</span> ENV&#123;BUILD_PYTORCH_MOBILE_WITH_HOST_TOOLCHAIN&#125;)</span><br><span class="line">  <span class="keyword">set</span>(INTERN_BUILD_MOBILE <span class="keyword">ON</span>)</span><br><span class="line"><span class="keyword">endif</span>()</span><br></pre></td></tr></table></figure>
+
+<p><a href="cmake/Codegen.cmake#L175-L207">cmake&#x2F;Codegen.cmake:175-207</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(SELECTED_OP_LIST)</span><br><span class="line">  <span class="keyword">message</span>(STATUS <span class="string">&quot;Running tracing-based selective build given operator list: $&#123;SELECTED_OP_LIST&#125;&quot;</span>)</span><br><span class="line">  ...</span><br><span class="line">    --op_selection_yaml_path <span class="variable">$&#123;SELECTED_OP_LIST&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>通过 <code>SELECTED_OP_LIST</code>，移动端构建系统只编译和打包用到的算子。</p>
+<hr>
+<h2 id="实例：构建轻量级工业相机应用"><a href="#实例：构建轻量级工业相机应用" class="headerlink" title="实例：构建轻量级工业相机应用"></a>实例：构建轻量级工业相机应用</h2><p>假设一家公司想开发一个用于工业相机的 C++ 应用：只在 CPU 上对图像进行预处理，然后发送出去。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;torch/torch.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 无需 GPU：只链接 aten_cpu</span></span><br><span class="line">    <span class="comment">// 无需 Python：使用 libtorch C++ API</span></span><br><span class="line">    <span class="comment">// 无需神经网络：只依赖 ATen 的张量运算</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过只链接需要的库，最终可以得到一个非常小巧、高效、无外部依赖的 C++ 程序。</p>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>PyTorch 精心设计的库结构是跨越服务器、桌面、移动端和嵌入式设备的关键：</p>
+<table>
+<thead>
+<tr>
+<th>原则</th>
+<th>目标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>隔离依赖项</strong></td>
+<td>灵活配置 GPU、Python 等可选依赖</td>
+</tr>
+<tr>
+<td><strong>按需使用</strong></td>
+<td>只链接需要的功能，控制二进制大小</td>
+</tr>
+<tr>
+<td><strong>技术限制</strong></td>
+<td>解决 Windows DLL 符号限制等问题</td>
+</tr>
+</tbody></table>
+<p>这些设计在可维护性、性能和部署灵活性之间取得了精妙的平衡。下次当你在 PyTorch 源码中看到这些分离的库时，记住——这正是这个强大框架设计哲学的体现。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_3.pytorch-library-structure/">http://example.com/2026/05/24/publish_3.pytorch-library-structure/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_6.1.pytorch-distributed-training/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            1.pytorch distributed training
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_1.pytorch-tensor-binding/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch tensor binding
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

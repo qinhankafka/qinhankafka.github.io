@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch structured kernel meta tensor | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="深入 PyTorch 核心：结构化内核与元张量的历史与未来（PyTorch 2.12 更新版） 本文档是对原始博客文章的更新和补充，旨在帮助读者理解 PyTorch 2.12.0 中结构化内核与元张量的最新实现。   零、为什么需要结构化内核和元张量？在深入技术细节之前，我们需要理解一个根本问题：为什么 PyTorch 需要专门处理”元数据”？ 0.1 传统内核的问题：元数据与计算耦合在传统模式下">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch structured kernel meta tensor">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="深入 PyTorch 核心：结构化内核与元张量的历史与未来（PyTorch 2.12 更新版） 本文档是对原始博客文章的更新和补充，旨在帮助读者理解 PyTorch 2.12.0 中结构化内核与元张量的最新实现。   零、为什么需要结构化内核和元张量？在深入技术细节之前，我们需要理解一个根本问题：为什么 PyTorch 需要专门处理”元数据”？ 0.1 传统内核的问题：元数据与计算耦合在传统模式下">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.206Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch structured kernel meta tensor
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%B6%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E5%92%8C%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%9F"><span class="toc-text">零、为什么需要结构化内核和元张量？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#0-1-%E4%BC%A0%E7%BB%9F%E5%86%85%E6%A0%B8%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%9A%E5%85%83%E6%95%B0%E6%8D%AE%E4%B8%8E%E8%AE%A1%E7%AE%97%E8%80%A6%E5%90%88"><span class="toc-text">0.1 传统内核的问题：元数据与计算耦合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-2-%E5%9C%BA%E6%99%AF%E4%B8%80%EF%BC%9AJIT-%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E5%BD%A2%E7%8A%B6%E6%8E%A8%E6%96%AD%E9%9C%80%E6%B1%82"><span class="toc-text">0.2 场景一：JIT 编译器的形状推断需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-3-%E5%9C%BA%E6%99%AF%E4%BA%8C%EF%BC%9ALazy-Tensor-%E4%B8%8E%E5%BB%B6%E8%BF%9F%E6%89%A7%E8%A1%8C"><span class="toc-text">0.3 场景二：Lazy Tensor 与延迟执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-4-%E5%9C%BA%E6%99%AF%E4%B8%89%EF%BC%9A%E5%BC%82%E6%AD%A5-CPU-%E7%9A%84%E5%B0%9D%E8%AF%95"><span class="toc-text">0.4 场景三：异步 CPU 的尝试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-5-%E5%9C%BA%E6%99%AF%E5%9B%9B%EF%BC%9A%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA%E4%B8%8E%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">0.5 场景四：模型导出与静态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-6-%E6%A0%B8%E5%BF%83%E7%9F%9B%E7%9B%BE"><span class="toc-text">0.6 核心矛盾</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E4%B8%8E%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">一、结构化内核与元张量的核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E4%BB%80%E4%B9%88%E6%98%AF%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%EF%BC%9F"><span class="toc-text">1.1 什么是结构化内核？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E4%BB%80%E4%B9%88%E6%98%AF%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%9F"><span class="toc-text">1.2 什么是元张量？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81PyTorch-2-12-0-%E4%B8%AD%E7%9A%84%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E5%AE%9E%E7%8E%B0"><span class="toc-text">二、PyTorch 2.12.0 中的结构化内核实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6%E7%BB%93%E6%9E%84"><span class="toc-text">2.1 核心文件结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%A3%B0%E6%98%8E"><span class="toc-text">2.2 结构化内核的声明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Meta-%E5%87%BD%E6%95%B0%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">2.3 Meta 函数的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%8F%E5%91%BD%E5%90%8D%EF%BC%9ATORCH-META-FUNC2-%E4%B8%AD%E7%9A%84-%E2%80%9C2%E2%80%9D-%E6%98%AF%E4%BB%80%E4%B9%88%E6%84%8F%E6%80%9D%EF%BC%9F"><span class="toc-text">宏命名：TORCH_META_FUNC2 中的 “2” 是什么意思？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#build-borrowing-binary-op-%E5%81%9A%E4%BA%86%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">build_borrowing_binary_op 做了什么？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#maybe-get-output-%E8%BF%94%E5%9B%9E%E7%9A%84%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">maybe_get_output() 返回的是什么？</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-1-Dispatcher-%E6%98%AF%E5%A6%82%E4%BD%95%E9%A2%84%E5%85%88%E5%88%86%E9%85%8D-output-%E7%9A%84%EF%BC%9F"><span class="toc-text">问题 1: Dispatcher 是如何预先分配 output 的？</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-2-maybe-get-output-0-%E7%9A%84%E5%AE%9E%E7%8E%B0%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">问题 2: maybe_get_output(0) 的实现是什么？</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-3-build-borrowing-binary-op-%E5%A6%82%E4%BD%95%E8%AE%A1%E7%AE%97%E8%BE%93%E5%87%BA%E5%BD%A2%E7%8A%B6%EF%BC%9F"><span class="toc-text">问题 3: build_borrowing_binary_op 如何计算输出形状？</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Meta-%E5%87%BD%E6%95%B0%E7%9A%84%E8%BF%94%E5%9B%9E%E7%B1%BB%E5%9E%8B"><span class="toc-text">Meta 函数的返回类型</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-TensorMeta-h-%E4%B8%AD%E7%9A%84-set-output-%E6%96%B9%E6%B3%95"><span class="toc-text">2.5 TensorMeta.h 中的 set_output 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%88Meta-Tensor%EF%BC%89%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">三、元张量（Meta Tensor）的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Meta-%E8%AE%BE%E5%A4%87%E7%9A%84%E6%B3%A8%E5%86%8C"><span class="toc-text">3.1 Meta 设备的注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Meta-Allocator"><span class="toc-text">3.2 Meta Allocator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Meta-Guard-%E5%AE%9E%E7%8E%B0"><span class="toc-text">3.3 Meta Guard 实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E7%A9%BA%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E5%88%9B%E5%BB%BA"><span class="toc-text">3.4 空元张量的创建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81Dispatch-%E6%9C%BA%E5%88%B6%E4%B8%AD%E7%9A%84-Meta-%E5%A4%84%E7%90%86"><span class="toc-text">四、Dispatch 机制中的 Meta 处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-DispatchKey-%E4%B8%AD%E7%9A%84-Meta"><span class="toc-text">4.1 DispatchKey 中的 Meta</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-Meta-Fallback-Kernel"><span class="toc-text">4.2 Meta Fallback Kernel</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">五、结构化内核的工作流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%88%86%E6%B4%BE%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">5.1 分派流程图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%AE%8C%E6%95%B4%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">5.2 结构化内核的完整生命周期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8-vs-%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%AF%B9%E6%AF%94"><span class="toc-text">六、结构化内核 vs 非结构化内核的对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-add-%E6%93%8D%E4%BD%9C%E7%9A%84%E7%BB%93%E6%9E%84%E5%8C%96%E5%AE%9E%E7%8E%B0"><span class="toc-text">6.1 add 操作的结构化实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-structured-inherits-TensorIteratorBase%EF%BC%9F"><span class="toc-text">6.2 为什么需要 structured_inherits: TensorIteratorBase？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">七、元张量的应用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E5%BD%A2%E7%8A%B6%E6%8E%A8%E6%96%AD%EF%BC%88Shape-Inference%EF%BC%89"><span class="toc-text">7.1 形状推断（Shape Inference）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA%E6%97%B6%E7%9A%84%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">7.2 模型导出时的静态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-3-%E7%BC%96%E8%AF%91%E5%99%A8%E4%BC%98%E5%8C%96"><span class="toc-text">7.3 编译器优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E5%BD%93%E5%89%8D%E7%8A%B6%E6%80%81%E4%B8%8E%E5%B1%95%E6%9C%9B"><span class="toc-text">八、当前状态与展望</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#8-1-%E5%B7%B2%E8%BF%81%E7%A7%BB%E7%9A%84%E7%AE%97%E5%AD%90"><span class="toc-text">8.1 已迁移的算子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-2-%E4%BB%8D%E5%9C%A8%E8%BF%9B%E8%A1%8C%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">8.2 仍在进行的工作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-3-%E6%9C%AA%E6%9D%A5%E6%96%B9%E5%90%91"><span class="toc-text">8.3 未来方向</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81%E5%BC%80%E5%8F%91%E8%80%85%E6%8C%87%E5%8D%97"><span class="toc-text">九、开发者指南</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#9-1-%E5%A6%82%E4%BD%95%E5%88%A4%E6%96%AD%E4%B8%80%E4%B8%AA%E7%AE%97%E5%AD%90%E6%98%AF%E5%90%A6%E6%94%AF%E6%8C%81%E5%85%83%E5%BC%A0%E9%87%8F"><span class="toc-text">9.1 如何判断一个算子是否支持元张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-2-%E4%B8%BA%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E6%B7%BB%E5%8A%A0-Meta-%E6%94%AF%E6%8C%81"><span class="toc-text">9.2 为自定义算子添加 Meta 支持</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-text">十、总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%B6%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E5%92%8C%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%9F"><span class="toc-text">零、为什么需要结构化内核和元张量？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#0-1-%E4%BC%A0%E7%BB%9F%E5%86%85%E6%A0%B8%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%9A%E5%85%83%E6%95%B0%E6%8D%AE%E4%B8%8E%E8%AE%A1%E7%AE%97%E8%80%A6%E5%90%88"><span class="toc-text">0.1 传统内核的问题：元数据与计算耦合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-2-%E5%9C%BA%E6%99%AF%E4%B8%80%EF%BC%9AJIT-%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E5%BD%A2%E7%8A%B6%E6%8E%A8%E6%96%AD%E9%9C%80%E6%B1%82"><span class="toc-text">0.2 场景一：JIT 编译器的形状推断需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-3-%E5%9C%BA%E6%99%AF%E4%BA%8C%EF%BC%9ALazy-Tensor-%E4%B8%8E%E5%BB%B6%E8%BF%9F%E6%89%A7%E8%A1%8C"><span class="toc-text">0.3 场景二：Lazy Tensor 与延迟执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-4-%E5%9C%BA%E6%99%AF%E4%B8%89%EF%BC%9A%E5%BC%82%E6%AD%A5-CPU-%E7%9A%84%E5%B0%9D%E8%AF%95"><span class="toc-text">0.4 场景三：异步 CPU 的尝试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-5-%E5%9C%BA%E6%99%AF%E5%9B%9B%EF%BC%9A%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA%E4%B8%8E%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">0.5 场景四：模型导出与静态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#0-6-%E6%A0%B8%E5%BF%83%E7%9F%9B%E7%9B%BE"><span class="toc-text">0.6 核心矛盾</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E4%B8%8E%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">一、结构化内核与元张量的核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E4%BB%80%E4%B9%88%E6%98%AF%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%EF%BC%9F"><span class="toc-text">1.1 什么是结构化内核？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E4%BB%80%E4%B9%88%E6%98%AF%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%9F"><span class="toc-text">1.2 什么是元张量？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81PyTorch-2-12-0-%E4%B8%AD%E7%9A%84%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E5%AE%9E%E7%8E%B0"><span class="toc-text">二、PyTorch 2.12.0 中的结构化内核实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6%E7%BB%93%E6%9E%84"><span class="toc-text">2.1 核心文件结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%A3%B0%E6%98%8E"><span class="toc-text">2.2 结构化内核的声明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Meta-%E5%87%BD%E6%95%B0%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">2.3 Meta 函数的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%8F%E5%91%BD%E5%90%8D%EF%BC%9ATORCH-META-FUNC2-%E4%B8%AD%E7%9A%84-%E2%80%9C2%E2%80%9D-%E6%98%AF%E4%BB%80%E4%B9%88%E6%84%8F%E6%80%9D%EF%BC%9F"><span class="toc-text">宏命名：TORCH_META_FUNC2 中的 “2” 是什么意思？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#build-borrowing-binary-op-%E5%81%9A%E4%BA%86%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">build_borrowing_binary_op 做了什么？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#maybe-get-output-%E8%BF%94%E5%9B%9E%E7%9A%84%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">maybe_get_output() 返回的是什么？</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-1-Dispatcher-%E6%98%AF%E5%A6%82%E4%BD%95%E9%A2%84%E5%85%88%E5%88%86%E9%85%8D-output-%E7%9A%84%EF%BC%9F"><span class="toc-text">问题 1: Dispatcher 是如何预先分配 output 的？</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-2-maybe-get-output-0-%E7%9A%84%E5%AE%9E%E7%8E%B0%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">问题 2: maybe_get_output(0) 的实现是什么？</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%97%AE%E9%A2%98-3-build-borrowing-binary-op-%E5%A6%82%E4%BD%95%E8%AE%A1%E7%AE%97%E8%BE%93%E5%87%BA%E5%BD%A2%E7%8A%B6%EF%BC%9F"><span class="toc-text">问题 3: build_borrowing_binary_op 如何计算输出形状？</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Meta-%E5%87%BD%E6%95%B0%E7%9A%84%E8%BF%94%E5%9B%9E%E7%B1%BB%E5%9E%8B"><span class="toc-text">Meta 函数的返回类型</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-TensorMeta-h-%E4%B8%AD%E7%9A%84-set-output-%E6%96%B9%E6%B3%95"><span class="toc-text">2.5 TensorMeta.h 中的 set_output 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%85%83%E5%BC%A0%E9%87%8F%EF%BC%88Meta-Tensor%EF%BC%89%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">三、元张量（Meta Tensor）的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Meta-%E8%AE%BE%E5%A4%87%E7%9A%84%E6%B3%A8%E5%86%8C"><span class="toc-text">3.1 Meta 设备的注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Meta-Allocator"><span class="toc-text">3.2 Meta Allocator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Meta-Guard-%E5%AE%9E%E7%8E%B0"><span class="toc-text">3.3 Meta Guard 实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E7%A9%BA%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E5%88%9B%E5%BB%BA"><span class="toc-text">3.4 空元张量的创建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81Dispatch-%E6%9C%BA%E5%88%B6%E4%B8%AD%E7%9A%84-Meta-%E5%A4%84%E7%90%86"><span class="toc-text">四、Dispatch 机制中的 Meta 处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-DispatchKey-%E4%B8%AD%E7%9A%84-Meta"><span class="toc-text">4.1 DispatchKey 中的 Meta</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-Meta-Fallback-Kernel"><span class="toc-text">4.2 Meta Fallback Kernel</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">五、结构化内核的工作流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%88%86%E6%B4%BE%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">5.1 分派流程图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%AE%8C%E6%95%B4%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">5.2 结构化内核的完整生命周期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8-vs-%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%86%85%E6%A0%B8%E7%9A%84%E5%AF%B9%E6%AF%94"><span class="toc-text">六、结构化内核 vs 非结构化内核的对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-add-%E6%93%8D%E4%BD%9C%E7%9A%84%E7%BB%93%E6%9E%84%E5%8C%96%E5%AE%9E%E7%8E%B0"><span class="toc-text">6.1 add 操作的结构化实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-structured-inherits-TensorIteratorBase%EF%BC%9F"><span class="toc-text">6.2 为什么需要 structured_inherits: TensorIteratorBase？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E5%85%83%E5%BC%A0%E9%87%8F%E7%9A%84%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">七、元张量的应用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E5%BD%A2%E7%8A%B6%E6%8E%A8%E6%96%AD%EF%BC%88Shape-Inference%EF%BC%89"><span class="toc-text">7.1 形状推断（Shape Inference）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA%E6%97%B6%E7%9A%84%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">7.2 模型导出时的静态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-3-%E7%BC%96%E8%AF%91%E5%99%A8%E4%BC%98%E5%8C%96"><span class="toc-text">7.3 编译器优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E5%BD%93%E5%89%8D%E7%8A%B6%E6%80%81%E4%B8%8E%E5%B1%95%E6%9C%9B"><span class="toc-text">八、当前状态与展望</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#8-1-%E5%B7%B2%E8%BF%81%E7%A7%BB%E7%9A%84%E7%AE%97%E5%AD%90"><span class="toc-text">8.1 已迁移的算子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-2-%E4%BB%8D%E5%9C%A8%E8%BF%9B%E8%A1%8C%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">8.2 仍在进行的工作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-3-%E6%9C%AA%E6%9D%A5%E6%96%B9%E5%90%91"><span class="toc-text">8.3 未来方向</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81%E5%BC%80%E5%8F%91%E8%80%85%E6%8C%87%E5%8D%97"><span class="toc-text">九、开发者指南</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#9-1-%E5%A6%82%E4%BD%95%E5%88%A4%E6%96%AD%E4%B8%80%E4%B8%AA%E7%AE%97%E5%AD%90%E6%98%AF%E5%90%A6%E6%94%AF%E6%8C%81%E5%85%83%E5%BC%A0%E9%87%8F"><span class="toc-text">9.1 如何判断一个算子是否支持元张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-2-%E4%B8%BA%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E6%B7%BB%E5%8A%A0-Meta-%E6%94%AF%E6%8C%81"><span class="toc-text">9.2 为自定义算子添加 Meta 支持</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-text">十、总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="深入-PyTorch-核心：结构化内核与元张量的历史与未来（PyTorch-2-12-更新版）"><a href="#深入-PyTorch-核心：结构化内核与元张量的历史与未来（PyTorch-2-12-更新版）" class="headerlink" title="深入 PyTorch 核心：结构化内核与元张量的历史与未来（PyTorch 2.12 更新版）"></a>深入 PyTorch 核心：结构化内核与元张量的历史与未来（PyTorch 2.12 更新版）</h1><blockquote>
+<p>本文档是对原始博客文章的更新和补充，旨在帮助读者理解 PyTorch 2.12.0 中结构化内核与元张量的最新实现。</p>
+</blockquote>
+<hr>
+<h2 id="零、为什么需要结构化内核和元张量？"><a href="#零、为什么需要结构化内核和元张量？" class="headerlink" title="零、为什么需要结构化内核和元张量？"></a>零、为什么需要结构化内核和元张量？</h2><p>在深入技术细节之前，我们需要理解一个根本问题：<strong>为什么 PyTorch 需要专门处理”元数据”？</strong></p>
+<h3 id="0-1-传统内核的问题：元数据与计算耦合"><a href="#0-1-传统内核的问题：元数据与计算耦合" class="headerlink" title="0.1 传统内核的问题：元数据与计算耦合"></a>0.1 传统内核的问题：元数据与计算耦合</h3><p>在传统模式下，一个内核函数需要处理所有事情：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 传统 CPU 加法内核</span></span><br><span class="line"><span class="function">Tensor <span class="title">add_cpu_kernel</span><span class="params">(<span class="type">const</span> Tensor&amp; a, <span class="type">const</span> Tensor&amp; b)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 1. 检查输入有效性</span></span><br><span class="line">    <span class="built_in">check_shapes</span>(a, b);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 计算输出形状（广播逻辑）</span></span><br><span class="line">    <span class="keyword">auto</span> output_shape = <span class="built_in">calculate_broadcast_shape</span>(a.<span class="built_in">sizes</span>(), b.<span class="built_in">sizes</span>());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3. 推断输出数据类型（类型提升）</span></span><br><span class="line">    <span class="keyword">auto</span> output_dtype = <span class="built_in">promote_types</span>(a.<span class="built_in">dtype</span>(), b.<span class="built_in">dtype</span>());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 4. 确定内存布局（连续性、步幅）</span></span><br><span class="line">    <span class="keyword">auto</span> layout = <span class="built_in">infer_layout</span>(a, b);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 5. 创建并分配输出张量的内存</span></span><br><span class="line">    Tensor output = <span class="built_in">empty</span>(output_shape, device=CPU, dtype=output_dtype);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 6. 执行真正的计算</span></span><br><span class="line">    <span class="built_in">cpu_add_kernel</span>(output, a, b);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> output;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>问题</strong>：如果另一个设备（如 CUDA）需要相同的功能，你必须复制粘贴所有这些元数据处理逻辑。这导致了：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>代码重复</strong></td>
+<td>CPU 和 CUDA 内核包含大量相同的形状计算、类型推断逻辑</td>
+</tr>
+<tr>
+<td><strong>维护困难</strong></td>
+<td>修改广播逻辑需要在多处同步更新</td>
+</tr>
+<tr>
+<td><strong>无法独立获取元信息</strong></td>
+<td>无法在不执行计算的情况下获取输出形状</td>
+</tr>
+</tbody></table>
+<h3 id="0-2-场景一：JIT-编译器的形状推断需求"><a href="#0-2-场景一：JIT-编译器的形状推断需求" class="headerlink" title="0.2 场景一：JIT 编译器的形状推断需求"></a>0.2 场景一：JIT 编译器的形状推断需求</h3><p>当你使用 <code>torch.compile</code> 或 TorchScript 时，编译器需要在<strong>不执行实际计算</strong>的情况下推断每个算子的输出形状。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">用户代码:</span><br><span class="line">    a = torch.randn(3, 4)</span><br><span class="line">    b = torch.randn(4, 5)</span><br><span class="line">    c = torch.matmul(a, b)  # 编译器需要知道 c 的形状是 (3, 5)</span><br><span class="line"></span><br><span class="line">但问题是：形状计算逻辑与内核实现耦合在一起！</span><br></pre></td></tr></table></figure>
+
+<p><strong>传统解决方案</strong>：用真实的零值张量跑一遍计算图，记录所有中间张量的元信息。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 绕过问题的变通方法</span></span><br><span class="line">example_input = torch.zeros(<span class="number">3</span>, <span class="number">4</span>)  <span class="comment"># 用零值张量</span></span><br><span class="line">traced_graph = torch.jit.trace(model, example_input)</span><br></pre></td></tr></table></figure>
+
+<p><strong>问题</strong>：</p>
+<ul>
+<li>零值张量可能无法覆盖所有形状场景（如动态形状）</li>
+<li>效率低下，每次形状推断都要完整执行计算</li>
+<li>无法处理依赖于实际输入数据的形状（如 <code>tensor.shape[0]</code>）</li>
+</ul>
+<h3 id="0-3-场景二：Lazy-Tensor-与延迟执行"><a href="#0-3-场景二：Lazy-Tensor-与延迟执行" class="headerlink" title="0.3 场景二：Lazy Tensor 与延迟执行"></a>0.3 场景二：Lazy Tensor 与延迟执行</h3><p>PyTorch&#x2F;XLA（以及 torch.compile）使用 Lazy Tensor 机制：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">传统执行:</span><br><span class="line">    tensor.add_(1) → 立即计算 → 返回结果</span><br><span class="line"></span><br><span class="line">Lazy Tensor 执行:</span><br><span class="line">    tensor.add_(1) → 只记录操作（add_）→ 返回一个&quot;懒 tensor&quot;</span><br><span class="line">                      ↓</span><br><span class="line">              系统分析是否有可融合的操作</span><br><span class="line">                      ↓</span><br><span class="line">              通过融合内核一次性执行多个操作</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键问题</strong>：每次执行一个懒操作后，必须立即返回一个有效的 Tensor 对象，这个对象需要有正确的形状和类型，以便后续代码可以使用。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">x = torch.randn(<span class="number">3</span>, <span class="number">4</span>)</span><br><span class="line">y = x + <span class="number">1</span>  <span class="comment"># Lazy 记录: 等待融合</span></span><br><span class="line">z = y * <span class="number">2</span>  <span class="comment"># Lazy 记录: 等待融合</span></span><br><span class="line"><span class="comment"># 此时 y 和 z 都只是&quot;懒 tensor&quot;，没有实际计算</span></span><br><span class="line"><span class="comment"># 但后续代码可能需要知道 y.shape 的大小</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="0-4-场景三：异步-CPU-的尝试"><a href="#0-4-场景三：异步-CPU-的尝试" class="headerlink" title="0.4 场景三：异步 CPU 的尝试"></a>0.4 场景三：异步 CPU 的尝试</h3><p>PyTorch 的 CUDA 操作是异步的（调用后立即返回，GPU 在后台执行）。社区曾希望实现异步 CPU，让 CPU 操作也通过线程池异步执行，从而降低主线程延迟。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 理想中的异步 CPU</span></span><br><span class="line">x = torch.randn(<span class="number">1000</span>, <span class="number">1000</span>)</span><br><span class="line">y = x + <span class="number">1</span>  <span class="comment"># 立即返回，不等待计算完成</span></span><br><span class="line">z = y + <span class="number">2</span>  <span class="comment"># 可以和 y 的计算并行</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>但问题</strong>：要立即返回 <code>y</code>，必须知道它的形状和类型。如果元数据计算和实际计算是耦合的，就无法先返回形状再异步执行计算。</p>
+<h3 id="0-5-场景四：模型导出与静态分析"><a href="#0-5-场景四：模型导出与静态分析" class="headerlink" title="0.5 场景四：模型导出与静态分析"></a>0.5 场景四：模型导出与静态分析</h3><p>当你导出模型进行部署时（如 ONNX、TorchScript、torch.export），需要在不运行模型的情况下知道：</p>
+<ul>
+<li>每个中间张量的形状</li>
+<li>内存占用量</li>
+<li>算子兼容性检查</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 模型导出时的静态分析</span></span><br><span class="line">model = MyModel()</span><br><span class="line"><span class="comment"># 不运行模型，推断出整个计算图的形状变化</span></span><br><span class="line">shape_info = torch.export.analyze_structure(model, <span class="built_in">input</span>=(torch.randn(<span class="number">1</span>, <span class="number">3</span>, <span class="number">224</span>, <span class="number">224</span>),))</span><br><span class="line"><span class="built_in">print</span>(shape_info)  <span class="comment"># 完整的形状信息</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="0-6-核心矛盾"><a href="#0-6-核心矛盾" class="headerlink" title="0.6 核心矛盾"></a>0.6 核心矛盾</h3><p>所有这些场景都面临同一个根本矛盾：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────┐</span><br><span class="line">│                    核心矛盾                               │</span><br><span class="line">│                                                         │</span><br><span class="line">│  如果元数据计算和实际计算混在一起：                       │</span><br><span class="line">│                                                         │</span><br><span class="line">│  1. 无法在不执行计算的情况下获取形状                      │</span><br><span class="line">│  2. 无法让不同设备复用相同的元数据逻辑                     │</span><br><span class="line">│  3. 无法实现 Lazy Tensor 的延迟执行                      │</span><br><span class="line">│  4. 无法进行异步 CPU 计算                                 │</span><br><span class="line">│                                                         │</span><br><span class="line">│  解决方案：把&quot;元数据处理&quot;从内核中分离出来！              │</span><br><span class="line">└─────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="一、结构化内核与元张量的核心概念"><a href="#一、结构化内核与元张量的核心概念" class="headerlink" title="一、结构化内核与元张量的核心概念"></a>一、结构化内核与元张量的核心概念</h2><h3 id="1-1-什么是结构化内核？"><a href="#1-1-什么是结构化内核？" class="headerlink" title="1.1 什么是结构化内核？"></a>1.1 什么是结构化内核？</h3><p>结构化内核（Structured Kernels）是 PyTorch 中编写内核的新范式，它将传统内核的职责一分为二：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>职责</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Meta 函数</strong></td>
+<td>处理元数据：形状推导、dtype 推断、内存布局</td>
+<td>与设备无关，不执行实际计算</td>
+</tr>
+<tr>
+<td><strong>Impl 函数</strong></td>
+<td>执行核心计算任务</td>
+<td>设备相关（CPU&#x2F;CUDA&#x2F;MPS 等）</td>
+</tr>
+</tbody></table>
+<h3 id="1-2-什么是元张量？"><a href="#1-2-什么是元张量？" class="headerlink" title="1.2 什么是元张量？"></a>1.2 什么是元张量？</h3><p>元张量（Meta Tensors）是结构化内核的自然延伸：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">普通张量:  [shape, dtype, layout, data_ptr] → 实际数据</span><br><span class="line">元张量:    [shape, dtype, layout, data_ptr=None] → 无数据存储</span><br></pre></td></tr></table></figure>
+
+<p>当算子在 <code>meta</code> 设备上执行时，只调用 Meta 函数计算输出的形状和类型，返回一个”空”张量。这对于<strong>不执行实际计算的情况下推断整个模型的形状变化</strong>非常有用。</p>
+<hr>
+<h2 id="二、PyTorch-2-12-0-中的结构化内核实现"><a href="#二、PyTorch-2-12-0-中的结构化内核实现" class="headerlink" title="二、PyTorch 2.12.0 中的结构化内核实现"></a>二、PyTorch 2.12.0 中的结构化内核实现</h2><h3 id="2-1-核心文件结构"><a href="#2-1-核心文件结构" class="headerlink" title="2.1 核心文件结构"></a>2.1 核心文件结构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">aten/src/ATen/</span><br><span class="line">├── TensorMeta.h                    # TORCH_META_FUNC / TORCH_IMPL_FUNC 宏定义</span><br><span class="line">├── native/</span><br><span class="line">│   ├── native_functions.yaml       # 结构化内核声明</span><br><span class="line">│   ├── BinaryOps.cpp               # 结构化内核实现示例</span><br><span class="line">│   └── MetaTensor.cpp              # 元张量实现</span><br><span class="line">└── core/</span><br><span class="line">    └── MetaFallbackKernel.cpp      # Meta 设备的 fallback 处理</span><br><span class="line"></span><br><span class="line">c10/core/</span><br><span class="line">├── DispatchKey.h                  # DispatchKey 枚举定义</span><br><span class="line">└── DeviceType.h                    # 设备类型定义</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-结构化内核的声明"><a href="#2-2-结构化内核的声明" class="headerlink" title="2.2 结构化内核的声明"></a>2.2 结构化内核的声明</h3><p>在 <code>native_functions.yaml</code> 中，结构化内核通过 <code>structured: True</code> 声明：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># aten/src/ATen/native/native_functions.yaml:578-594</span></span><br><span class="line"><span class="bullet">-</span> <span class="attr">func:</span> <span class="string">add.out(Tensor</span> <span class="string">self,</span> <span class="string">Tensor</span> <span class="string">other,</span> <span class="string">*,</span> <span class="string">Scalar</span> <span class="string">alpha=1,</span> <span class="string">Tensor(a!)</span> <span class="string">out)</span> <span class="string">-&gt;</span> <span class="string">Tensor(a!)</span></span><br><span class="line">  <span class="attr">device_check:</span> <span class="string">NoCheck</span>   <span class="comment"># TensorIterator</span></span><br><span class="line">  <span class="attr">structured:</span> <span class="literal">True</span></span><br><span class="line">  <span class="attr">structured_inherits:</span> <span class="string">TensorIteratorBase</span></span><br><span class="line">  <span class="attr">ufunc_inner_loop:</span></span><br><span class="line">    <span class="attr">Generic:</span> <span class="string">add</span> <span class="string">(AllAndComplex,</span> <span class="string">BFloat16,</span> <span class="string">Half,</span> <span class="string">ComplexHalf)</span></span><br><span class="line">    <span class="attr">ScalarOnly:</span> <span class="string">add</span> <span class="string">(Bool)</span></span><br><span class="line">  <span class="attr">dispatch:</span></span><br><span class="line">    <span class="string">SparseCPU,</span> <span class="attr">SparseMeta:</span> <span class="string">add_out_sparse_cpu</span></span><br><span class="line">    <span class="attr">SparseCUDA:</span> <span class="string">add_out_sparse_cuda</span></span><br><span class="line">    <span class="attr">SparseMPS:</span> <span class="string">add_out_sparse_mps</span></span><br><span class="line">    <span class="string">...</span></span><br></pre></td></tr></table></figure>
+
+<p>关键字段说明：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>structured: True</code></td>
+<td>声明这是一个结构化内核</td>
+</tr>
+<tr>
+<td><code>structured_inherits: TensorIteratorBase</code></td>
+<td>继承的基类，用于构建输出张量</td>
+</tr>
+<tr>
+<td><code>dispatch</code></td>
+<td>设备相关的实现函数映射</td>
+</tr>
+</tbody></table>
+<h3 id="2-3-Meta-函数的实现"><a href="#2-3-Meta-函数的实现" class="headerlink" title="2.3 Meta 函数的实现"></a>2.3 Meta 函数的实现</h3><p>让我们先看一个具体的 Meta 函数实现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aten/src/ATen/native/BinaryOps.cpp:151-156</span></span><br><span class="line"><span class="keyword">namespace</span> at::meta &#123;</span><br><span class="line"></span><br><span class="line"><span class="built_in">TORCH_META_FUNC2</span>(add, Tensor) (</span><br><span class="line">  <span class="type">const</span> Tensor&amp; self, <span class="type">const</span> Tensor&amp; other, <span class="type">const</span> Scalar&amp; alpha</span><br><span class="line">) &#123;</span><br><span class="line">  <span class="built_in">build_borrowing_binary_op</span>(<span class="built_in">maybe_get_output</span>(), self, other);</span><br><span class="line">  native::<span class="built_in">alpha_check</span>(<span class="built_in">dtype</span>(), alpha);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这段代码虽然短，但涉及几个关键概念需要解释。</p>
+<h4 id="宏命名：TORCH-META-FUNC2-中的-“2”-是什么意思？"><a href="#宏命名：TORCH-META-FUNC2-中的-“2”-是什么意思？" class="headerlink" title="宏命名：TORCH_META_FUNC2 中的 “2” 是什么意思？"></a>宏命名：<code>TORCH_META_FUNC2</code> 中的 “2” 是什么意思？</h4><p>第一次看到 <code>TORCH_META_FUNC2(add, Tensor)</code>，可能会误以为这是一个版本号或者某种特殊标记。实际上，这个 “2” 表示的是<strong>宏接受两个参数</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>宏</th>
+<th>参数数量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>TORCH_META_FUNC(name)</code></td>
+<td>1 个参数</td>
+<td>用于只有默认 overload 的简单算子</td>
+</tr>
+<tr>
+<td><code>TORCH_META_FUNC2(name, overload)</code></td>
+<td>2 个参数</td>
+<td>用于有多个 overload 的算子</td>
+</tr>
+</tbody></table>
+<p>在 <code>TensorMeta.h</code> 中，宏的定义是这样的：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TensorMeta.h:27-29</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> TORCH_META_FUNC(name) void structured_##name::meta</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> TORCH_META_FUNC2(name, overload) \</span></span><br><span class="line"><span class="meta">  void structured_##name##_##overload::meta</span></span><br></pre></td></tr></table></figure>
+
+<p>所以 <code>TORCH_META_FUNC2(add, Tensor)</code> 展开后实际上是：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">structured_add_Tensor::meta</span> <span class="params">(...)</span></span></span><br></pre></td></tr></table></figure>
+
+<p><code>structured_add_Tensor</code> 是一个自动生成的类名（代码生成器根据 <code>add.Tensor</code> 这个 overload 名生成），<code>meta</code> 是它的一个成员函数。</p>
+<p><strong>为什么需要区分 1 参数和 2 参数？</strong></p>
+<p>因为 PyTorch 中有些算子只有一个 overload（变体），比如 <code>abs</code>，写成 <code>abs.Tensor</code>；而有些算子有多个 overload，比如 <code>add.Tensor</code>、<code>add.Scalar</code>。对于有多 overload 的算子，需要用 <code>TORCH_META_FUNC2</code> 并指定是哪一个 overload。</p>
+<h4 id="build-borrowing-binary-op-做了什么？"><a href="#build-borrowing-binary-op-做了什么？" class="headerlink" title="build_borrowing_binary_op 做了什么？"></a><code>build_borrowing_binary_op</code> 做了什么？</h4><p><code>build_borrowing_binary_op</code> 是 <code>TensorIteratorBase</code> 的一个成员函数，负责<strong>配置二元操作的 TensorIterator</strong>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TensorIterator.cpp:995-1001</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">TensorIteratorBase::build_borrowing_binary_op</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> TensorBase&amp; out, <span class="type">const</span> TensorBase&amp; a, <span class="type">const</span> TensorBase&amp; b)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">build</span>(<span class="built_in">BINARY_OP_CONFIG</span>()</span><br><span class="line">      .<span class="built_in">add_output</span>(out)</span><br><span class="line">      .<span class="built_in">add_const_input</span>(a)</span><br><span class="line">      .<span class="built_in">add_const_input</span>(b));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>它的核心作用是配置输出张量的元信息，让它准备好接收计算结果：</p>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>广播处理</strong></td>
+<td>如果 <code>a</code> 和 <code>b</code> 形状不同（如 <code>(3,4)</code> 和 <code>(4,)</code>），自动计算广播后的输出形状 <code>(3,4)</code></td>
+</tr>
+<tr>
+<td><strong>类型提升</strong></td>
+<td>如果 <code>a</code> 和 <code>b</code> dtype 不同（如 float32 和 int64），决定提升到哪种类型</td>
+</tr>
+<tr>
+<td><strong>步幅计算</strong></td>
+<td>确定输出张量的 stride 布局</td>
+</tr>
+</tbody></table>
+<p>实际效果示例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">输入: a.shape = (3, 4), dtype = float32</span><br><span class="line">      b.shape = (4,), dtype = float32</span><br><span class="line">      ↓</span><br><span class="line">build_borrowing_binary_op(output, a, b)</span><br><span class="line">      ↓</span><br><span class="line">输出: output.shape = (3, 4)  # 广播后的形状</span><br><span class="line">      output.dtype = float32   # 类型保持一致</span><br></pre></td></tr></table></figure>
+
+<h4 id="maybe-get-output-返回的是什么？"><a href="#maybe-get-output-返回的是什么？" class="headerlink" title="maybe_get_output() 返回的是什么？"></a><code>maybe_get_output()</code> 返回的是什么？</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TensorMeta.h:128-131</span></span><br><span class="line"><span class="function"><span class="type">const</span> Tensor&amp; <span class="title">maybe_get_output</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">maybe_get_output</span>(<span class="number">0</span>);  <span class="comment">// 默认获取第 0 个输出</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在结构化内核中，输出张量<strong>不是通过返回值传递的</strong>，而是通过类成员变量传递的。<code>maybe_get_output()</code> 返回一个<strong>预分配好的输出张量</strong>。</p>
+<p>这里需要解答几个关键问题：</p>
+<h5 id="问题-1-Dispatcher-是如何预先分配-output-的？"><a href="#问题-1-Dispatcher-是如何预先分配-output-的？" class="headerlink" title="问题 1: Dispatcher 是如何预先分配 output 的？"></a>问题 1: Dispatcher 是如何预先分配 output 的？</h5><p>实际上，Dispatcher 创建的 output 张量**并不是”已经有正确的 shape&#x2F;dtype&#x2F;stride”**——那只是最终的目标状态，而不是初始状态。让我重新解释这个流程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────────┐</span><br><span class="line">│  Dispatcher 调用结构化内核的实际流程                               │</span><br><span class="line">│                                                                  │</span><br><span class="line">│  1. 用户调用 torch.add(a, b)                                     │</span><br><span class="line">│     a.shape = (3, 4),  b.shape = (4,)                          │</span><br><span class="line">│                                                                  │</span><br><span class="line">│  2. Dispatcher 创建一个 output 张量&quot;毛坯房&quot;                        │</span><br><span class="line">│     output.shape = ???  (形状还没确定！)                          │</span><br><span class="line">│     output.data_ptr = nullptr (没有数据)                        │</span><br><span class="line">│                                                                  │</span><br><span class="line">│  3. Dispatcher 调用 meta()                                       │</span><br><span class="line">│  4. meta() 内部调用 build_borrowing_binary_op(output, a, b)     │</span><br><span class="line">│     ↓ 这个函数内部做了这些事：                                   │</span><br><span class="line">│       ① 查看 a 和 b 的形状                                       │</span><br><span class="line">│       ② 用 infer_size_dimvector 计算广播后的形状                 │</span><br><span class="line">│       ③ 配置 output.shape = (3, 4)                              │</span><br><span class="line">│                                                                  │</span><br><span class="line">│  5. meta() 返回后，output.shape 才是 (3, 4)                    │</span><br><span class="line">│                                                                  │</span><br><span class="line">│  6. Dispatcher 调用 impl()，impl() 执行计算并写入数据            │</span><br><span class="line">└─────────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p>可以把整个过程比作<strong>装修房子</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>比喻</th>
+<th>output 状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dispatcher 创建后</td>
+<td>毛坯房</td>
+<td><code>shape = ???</code> (还没确定)</td>
+</tr>
+<tr>
+<td>meta() 调用 build 后</td>
+<td>装修完成</td>
+<td><code>shape = (3, 4)</code></td>
+</tr>
+<tr>
+<td>impl() 执行后</td>
+<td>入住</td>
+<td><code>shape = (3, 4)</code>, <code>data_ptr = 有效</code></td>
+</tr>
+</tbody></table>
+<p>关键源码 (<code>TensorIterator.cpp:1493-1523</code>)：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">TensorIteratorBase::build</span><span class="params">(TensorIteratorConfig&amp; config)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">populate_operands</span>(config);     <span class="comment">// ① 把 output, a, b 加入 operands_</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">  <span class="built_in">compute_shape</span>(config);           <span class="comment">// ② 这里才计算形状（广播）</span></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">  <span class="built_in">allocate_or_resize_outputs</span>();    <span class="comment">// ③ 根据计算出的 shape 分配内存</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>所以 <code>build_borrowing_binary_op</code> 的作用正是<strong>计算形状</strong>，而不是使用一个已经计算好的形状。</p>
+<h5 id="问题-2-maybe-get-output-0-的实现是什么？"><a href="#问题-2-maybe-get-output-0-的实现是什么？" class="headerlink" title="问题 2: maybe_get_output(0) 的实现是什么？"></a>问题 2: <code>maybe_get_output(0)</code> 的实现是什么？</h5><p><code>maybe_get_output()</code> 的实现在 <code>TensorIterator</code> 类中：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TensorIterator.cpp:1673-1675</span></span><br><span class="line"><span class="function"><span class="type">const</span> Tensor&amp; <span class="title">TensorIterator::maybe_get_output</span><span class="params">(<span class="type">int64_t</span> output_idx)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">output</span>(output_idx);  <span class="comment">// 返回第 output_idx 个输出张量</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// TensorIterator.h:347-350</span></span><br><span class="line"><span class="function"><span class="type">const</span> Tensor&amp; <span class="title">output</span><span class="params">(<span class="type">int64_t</span> arg = <span class="number">0</span>)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="built_in">AT_ASSERT</span>(arg &lt; num_outputs_);</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">tensor</span>(arg);  <span class="comment">// tensor() 返回内部存储的 Tensor 对象</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>所以 <code>maybe_get_output(0)</code> 返回的是 <code>TensorIterator</code> 内部存储的第 0 个输出张量。这个张量是在 <code>build()</code> 阶段被设置进去的。</p>
+<h5 id="问题-3-build-borrowing-binary-op-如何计算输出形状？"><a href="#问题-3-build-borrowing-binary-op-如何计算输出形状？" class="headerlink" title="问题 3: build_borrowing_binary_op 如何计算输出形状？"></a>问题 3: <code>build_borrowing_binary_op</code> 如何计算输出形状？</h5><p>这是一个关键问题：不同操作（加法、乘法、矩阵乘法）产生完全不同的输出形状，<code>build_borrowing_binary_op</code> 是怎么知道该用哪种形状的呢？</p>
+<p><strong>答案：不同的操作调用不同的 <code>build_*</code> 方法！</strong></p>
+<table>
+<thead>
+<tr>
+<th>操作类型</th>
+<th>调用的方法</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>add</code></td>
+<td><code>build_borrowing_binary_op</code></td>
+<td>元素级广播，形状按 NumPy 广播规则</td>
+</tr>
+<tr>
+<td><code>matmul</code></td>
+<td>专门的 <code>matmul</code> 内核</td>
+<td>有自己的形状计算逻辑（矩阵乘法规则）</td>
+</tr>
+<tr>
+<td><code>sum</code></td>
+<td><code>build_reduction_op</code></td>
+<td>输出形状是输入形状的压缩版本</td>
+</tr>
+</tbody></table>
+<p><code>build_borrowing_binary_op</code> 的核心逻辑在 <code>compute_shape</code> 中 (<code>TensorIterator.cpp:1237-1274</code>)：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TensorIterator.cpp:1237-1274</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">TensorIteratorBase::compute_shape</span><span class="params">(<span class="type">const</span> TensorIteratorConfig&amp; config)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; op : operands_) &#123;</span><br><span class="line">    <span class="keyword">auto</span> shape = op.<span class="built_in">tensor_base</span>().<span class="built_in">sizes</span>();  <span class="comment">// 获取每个操作数的形状</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (shape_.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">      shape_ = shape;  <span class="comment">// 第一个操作数决定初始形状</span></span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!shape.<span class="built_in">equals</span>(shape_)) &#123;</span><br><span class="line">      <span class="comment">// 形状不同，进行广播</span></span><br><span class="line">      <span class="comment">// 关键函数：infer_size_dimvector</span></span><br><span class="line">      shape_ = <span class="built_in">infer_size_dimvector</span>(shape_, shape);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而 <code>infer_size_dimvector</code> (<code>ExpandUtils.cpp:56-58</code>) 实现了 <strong>NumPy 风格的广播规则</strong>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ExpandUtils.cpp:17-45</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Container, <span class="keyword">typename</span> ArrayType&gt;</span><br><span class="line"><span class="function">Container <span class="title">infer_size_impl</span><span class="params">(ArrayType a, ArrayType b)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> ndim = std::<span class="built_in">max</span>(a.<span class="built_in">size</span>(), b.<span class="built_in">size</span>());</span><br><span class="line">  <span class="function">Container <span class="title">expandedSizes</span><span class="params">(ndim)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">ptrdiff_t</span> i = ndim - <span class="number">1</span>; i &gt;= <span class="number">0</span>; --i) &#123;</span><br><span class="line">    <span class="type">ptrdiff_t</span> offset = ndim - <span class="number">1</span> - i;</span><br><span class="line">    <span class="type">ptrdiff_t</span> dimA = a.<span class="built_in">size</span>() - <span class="number">1</span> - offset;</span><br><span class="line">    <span class="type">ptrdiff_t</span> dimB = b.<span class="built_in">size</span>() - <span class="number">1</span> - offset;</span><br><span class="line">    <span class="keyword">auto</span> sizeA = (dimA &gt;= <span class="number">0</span>) ? a[dimA] : <span class="number">1</span>;  <span class="comment">// 缺失维度视为 1</span></span><br><span class="line">    <span class="keyword">auto</span> sizeB = (dimB &gt;= <span class="number">0</span>) ? b[dimB] : <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 如果两个维度都不是 1，则必须相等</span></span><br><span class="line">    <span class="keyword">if</span> (sizeA != <span class="number">1</span> &amp;&amp; sizeB != <span class="number">1</span> &amp;&amp; sizeA != sizeB) &#123;</span><br><span class="line">      <span class="built_in">TORCH_CHECK</span>(<span class="literal">false</span>, <span class="string">&quot;size mismatch&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 取非 1 的那个值（1 表示广播到另一个维度）</span></span><br><span class="line">    expandedSizes[i] = (sizeA == <span class="number">1</span>) ? sizeB : sizeA;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> expandedSizes;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>广播示例</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">a.shape = (3, 4),  b.shape = (4,)</span><br><span class="line">          ↓</span><br><span class="line">infer_size_dimvector((3,4), (4,))</span><br><span class="line">          ↓</span><br><span class="line">dim 0: sizeA=3, sizeB=1 → 取 3</span><br><span class="line">dim 1: sizeA=4, sizeB=4 → 取 4</span><br><span class="line">          ↓</span><br><span class="line">output.shape = (3, 4)</span><br><span class="line"></span><br><span class="line">a.shape = (3, 4),  b.shape = (1,)</span><br><span class="line">          ↓</span><br><span class="line">infer_size_dimvector((3,4), (1,))</span><br><span class="line">          ↓</span><br><span class="line">dim 0: sizeA=3, sizeB=1 → 取 3</span><br><span class="line">dim 1: sizeA=4, sizeB=1 → 取 4</span><br><span class="line">          ↓</span><br><span class="line">output.shape = (3, 4)</span><br></pre></td></tr></table></figure>
+
+<p><strong>注意</strong>：<code>build_borrowing_binary_op</code> 只处理<strong>元素级二元操作</strong>的形状计算（如 add、mul），它不知道也关心是加法还是乘法——这些操作的具体语义由 <code>impl()</code> 函数实现。<code>meta()</code> 函数只负责形状和类型，<strong>不关心具体是哪种子操作</strong>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│  meta() vs impl() 的职责分离                                 │</span><br><span class="line">│                                                              │</span><br><span class="line">│  meta()：                                                     │</span><br><span class="line">│    - 计算输出形状（广播）                                    │</span><br><span class="line">│    - 确定输出 dtype（类型提升）                              │</span><br><span class="line">│    - 确定输出 stride/ layout                                 │</span><br><span class="line">│    - 不关心具体是加法还是乘法                                 │</span><br><span class="line">│                                                              │</span><br><span class="line">│  impl()：                                                     │</span><br><span class="line">│    - 执行实际计算（add_cpu_impl / mul_cpu_impl）             │</span><br><span class="line">│    - 具体操作语义在这里确定                                   │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h4 id="Meta-函数的返回类型"><a href="#Meta-函数的返回类型" class="headerlink" title="Meta 函数的返回类型"></a>Meta 函数的返回类型</h4><p>你可能注意到 <code>TORCH_META_FUNC2</code> 定义的函数返回类型是 <code>void</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">structured_add_Tensor::meta</span><span class="params">(...)</span> </span>&#123;  <span class="comment">// 返回 void</span></span><br><span class="line">  <span class="built_in">build_borrowing_binary_op</span>(...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这可能会让人困惑：既然返回 <code>void</code>，那计算结果从哪里来？</p>
+<p>答案是：<strong>结果通过成员变量传递，而不是返回值</strong>。输出张量在 <code>meta()</code> 调用前已经通过 <code>maybe_get_output()</code> 获取，并在 <code>meta()</code> 阶段配置好了元信息，然后在 <code>impl()</code> 阶段被用来存储实际的计算结果。</p>
+<hr>
+<h3 id="2-5-TensorMeta-h-中的-set-output-方法"><a href="#2-5-TensorMeta-h-中的-set-output-方法" class="headerlink" title="2.5 TensorMeta.h 中的 set_output 方法"></a>2.5 TensorMeta.h 中的 set_output 方法</h3><p><code>MetaBase</code> 提供了三种设置输出的方法（<code>TensorMeta.h:75-125</code>）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 方法选择决策树：</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// - 能否支持任意 stride 的输出张量？</span></span><br><span class="line"><span class="comment">//     |</span></span><br><span class="line"><span class="comment">//     -- YES: `set_output_raw_strided`  ← 推荐用于结构化内核</span></span><br><span class="line"><span class="comment">//     |</span></span><br><span class="line"><span class="comment">//     -- NO: 输出张量 stride 是否需要连续？</span></span><br><span class="line"><span class="comment">//         |</span></span><br><span class="line"><span class="comment">//         -- YES: `set_output_contiguous`</span></span><br><span class="line"><span class="comment">//         |</span></span><br><span class="line"><span class="comment">//         -- NO: `set_output_strided`</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">set_output_strided</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">int64_t</span> output_idx,</span></span></span><br><span class="line"><span class="params"><span class="function">    IntArrayRef sizes,</span></span></span><br><span class="line"><span class="params"><span class="function">    IntArrayRef strides,</span></span></span><br><span class="line"><span class="params"><span class="function">    TensorOptions options,</span></span></span><br><span class="line"><span class="params"><span class="function">    DimnameList names = &#123;&#125;)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">TORCH_INTERNAL_ASSERT</span>(<span class="literal">false</span>, <span class="string">&quot;set_output_strided not implemented.&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">set_output_raw_strided</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">int64_t</span> output_idx,</span></span></span><br><span class="line"><span class="params"><span class="function">    IntArrayRef sizes,</span></span></span><br><span class="line"><span class="params"><span class="function">    IntArrayRef strides_hint,</span></span></span><br><span class="line"><span class="params"><span class="function">    TensorOptions options,</span></span></span><br><span class="line"><span class="params"><span class="function">    DimnameList names = &#123;&#125;)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">TORCH_INTERNAL_ASSERT</span>(<span class="literal">false</span>, <span class="string">&quot;set_output_strided not implemented.&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">set_output_contiguous</span><span class="params">(<span class="type">int64_t</span> output_idx, IntArrayRef sizes, TensorOptions options, DimnameList names = &#123;&#125;)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> strides = c10::<span class="built_in">contiguous_strides</span>(sizes);</span><br><span class="line">  <span class="built_in">set_output_strided</span>(output_idx, sizes, strides, options, names);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、元张量（Meta-Tensor）的实现"><a href="#三、元张量（Meta-Tensor）的实现" class="headerlink" title="三、元张量（Meta Tensor）的实现"></a>三、元张量（Meta Tensor）的实现</h2><h3 id="3-1-Meta-设备的注册"><a href="#3-1-Meta-设备的注册" class="headerlink" title="3.1 Meta 设备的注册"></a>3.1 Meta 设备的注册</h3><p>Meta 设备在 <code>DeviceType.h</code> 中定义：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// c10/core/DeviceType.h</span></span><br><span class="line"><span class="keyword">enum class</span> <span class="title class_">DeviceType</span> : <span class="type">uint8_t</span> &#123;</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">  PrivateUse3 = <span class="number">15</span>,</span><br><span class="line">  Meta = <span class="number">16</span>,  <span class="comment">// 元设备</span></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-Meta-Allocator"><a href="#3-2-Meta-Allocator" class="headerlink" title="3.2 Meta Allocator"></a>3.2 Meta Allocator</h3><p><code>EmptyTensor.cpp</code> 中定义了 Meta 设备的内存分配器：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aten/src/ATen/EmptyTensor.cpp:340-357</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">MetaAllocator</span> <span class="keyword">final</span> : <span class="keyword">public</span> at::Allocator &#123;</span><br><span class="line">  <span class="function"><span class="type">static</span> <span class="type">void</span> <span class="title">deleter</span><span class="params">(<span class="type">void</span>* <span class="type">const</span> pointer)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">TORCH_INTERNAL_ASSERT</span>(!pointer);  <span class="comment">// Meta 设备不存储数据</span></span><br><span class="line">  &#125;</span><br><span class="line">  <span class="function">DataPtr <span class="title">allocate</span><span class="params">(<span class="type">const</span> <span class="type">size_t</span> nbytes [[maybe_unused]])</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="literal">nullptr</span>, <span class="literal">nullptr</span>, &amp;deleter, at::<span class="built_in">Device</span>(DeviceType::Meta)&#125;;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="built_in">REGISTER_ALLOCATOR</span>(kMeta, &amp;g_meta_alloc)</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：Meta 设备的 <code>allocate</code> 返回一个 <code>nullptr</code> 的 DataPtr，因为元张量不存储实际数据。</p>
+<h3 id="3-3-Meta-Guard-实现"><a href="#3-3-Meta-Guard-实现" class="headerlink" title="3.3 Meta Guard 实现"></a>3.3 Meta Guard 实现</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aten/src/ATen/detail/MetaGuardImpl.cpp</span></span><br><span class="line"><span class="built_in">C10_REGISTER_GUARD_IMPL</span>(Meta, c10::impl::NoOpDeviceGuardImpl&lt;DeviceType::Meta&gt;)</span><br></pre></td></tr></table></figure>
+
+<p>Meta 设备使用 <code>NoOpDeviceGuard</code>，因为元张量不需要设备切换的实际操作。</p>
+<h3 id="3-4-空元张量的创建"><a href="#3-4-空元张量的创建" class="headerlink" title="3.4 空元张量的创建"></a>3.4 空元张量的创建</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aten/src/ATen/native/MetaTensor.cpp</span></span><br><span class="line"><span class="function">Tensor <span class="title">empty_meta_symint</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">  SymIntArrayRef size,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;ScalarType&gt; dtype_opt,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;Layout&gt; layout_opt,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;Device&gt; device_opt,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;<span class="type">bool</span>&gt; pin_memory_opt,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;MemoryFormat&gt; memory_format_opt,</span></span></span><br><span class="line"><span class="params"><span class="function">  std::optional&lt;Scalar&gt; guard_scalar_opt)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> at::detail::<span class="built_in">empty_meta</span>(*opt_size, ...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、Dispatch-机制中的-Meta-处理"><a href="#四、Dispatch-机制中的-Meta-处理" class="headerlink" title="四、Dispatch 机制中的 Meta 处理"></a>四、Dispatch 机制中的 Meta 处理</h2><h3 id="4-1-DispatchKey-中的-Meta"><a href="#4-1-DispatchKey-中的-Meta" class="headerlink" title="4.1 DispatchKey 中的 Meta"></a>4.1 DispatchKey 中的 Meta</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// c10/core/DispatchKey.h</span></span><br><span class="line"><span class="built_in">C10_FORALL_BACKEND_COMPONENTS</span>(_, extra) \</span><br><span class="line">  _(CPU, extra)                                 \</span><br><span class="line">  _(CUDA, extra)                                \</span><br><span class="line">  <span class="comment">// ... 其他后端 ...</span></span><br><span class="line">  _(Meta, extra)  <span class="comment">// Meta 是最后的后端组件</span></span><br></pre></td></tr></table></figure>
+
+<p>Meta 在 DispatchKey 优先级列表的末尾，这意味着它会在其他所有设备特定的分派键之后处理。</p>
+<h3 id="4-2-Meta-Fallback-Kernel"><a href="#4-2-Meta-Fallback-Kernel" class="headerlink" title="4.2 Meta Fallback Kernel"></a>4.2 Meta Fallback Kernel</h3><p>当算子没有为 Meta 设备注册专门的 kernel 时，会调用 fallback：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aten/src/ATen/core/MetaFallbackKernel.cpp</span></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="type">void</span> <span class="title">metaFallback</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> c10::OperatorHandle&amp; op,</span></span></span><br><span class="line"><span class="params"><span class="function">    c10::DispatchKeySet dispatch_keys,</span></span></span><br><span class="line"><span class="params"><span class="function">    torch::jit::Stack* stack)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">TORCH_CHECK_NOT_IMPLEMENTED</span>(</span><br><span class="line">      <span class="literal">false</span>,</span><br><span class="line">      op.<span class="built_in">operator_name</span>(),</span><br><span class="line">      <span class="string">&quot;: attempted to run this operator with Meta tensors, but there was no &quot;</span>,</span><br><span class="line">      <span class="string">&quot;fake impl or Meta kernel registered. You may have run into this message...&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="built_in">TORCH_LIBRARY_IMPL</span>(_, Meta, m) &#123;</span><br><span class="line">  m.<span class="built_in">fallback</span>(torch::CppFunction::<span class="built_in">makeFromBoxedFunction</span>&lt;&amp;metaFallback&gt;());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>错误信息解读</strong>：如果看到 “attempted to run this operator with Meta tensors, but there was no fake impl or Meta kernel registered”，说明该算子还没有迁移到结构化内核，或者没有提供 Meta 实现。</p>
+<hr>
+<h2 id="五、结构化内核的工作流程"><a href="#五、结构化内核的工作流程" class="headerlink" title="五、结构化内核的工作流程"></a>五、结构化内核的工作流程</h2><h3 id="5-1-分派流程图"><a href="#5-1-分派流程图" class="headerlink" title="5.1 分派流程图"></a>5.1 分派流程图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">torch.add(a, b)</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">Dispatcher::call()</span><br><span class="line">     │</span><br><span class="line">     ├── 从 a 和 b 提取 DispatchKeySet</span><br><span class="line">     │   例如: &#123;CPU, Dense&#125;</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">查找 add.out 的 dispatch table</span><br><span class="line">     │</span><br><span class="line">     ├── 查找 CPU 实现 → add_cpu_impl</span><br><span class="line">     ├── 查找 SparseCPU → add_out_sparse_cpu</span><br><span class="line">     └── ...</span><br><span class="line">     </span><br><span class="line">当使用 Meta 设备时：</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">add.out 的 meta 函数被调用</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">设置输出的 shape、dtype（但不分配数据）</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">返回元张量（data_ptr = nullptr）</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-结构化内核的完整生命周期"><a href="#5-2-结构化内核的完整生命周期" class="headerlink" title="5.2 结构化内核的完整生命周期"></a>5.2 结构化内核的完整生命周期</h3><p>以 <code>add.out</code> 为例：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 用户调用 torch.add(a, b)</span></span><br><span class="line"><span class="comment">// 2. Dispatcher 查找对应的 kernel</span></span><br><span class="line"><span class="comment">// 3. 对于 CPU 设备：</span></span><br><span class="line"><span class="comment">//    - 先调用 meta 函数设置输出元信息</span></span><br><span class="line"><span class="comment">//    - 再调用 impl 函数执行计算</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Meta 阶段（来自 native_functions.yaml 的 structured: True）</span></span><br><span class="line"><span class="built_in">TORCH_META_FUNC2</span>(add, Tensor) (</span><br><span class="line">  <span class="type">const</span> Tensor&amp; self, <span class="type">const</span> Tensor&amp; other, <span class="type">const</span> Scalar&amp; alpha</span><br><span class="line">) &#123;</span><br><span class="line">  <span class="built_in">build_borrowing_binary_op</span>(<span class="built_in">maybe_get_output</span>(), self, other);</span><br><span class="line">  <span class="comment">// 设置: shape、dtype、layout（从输入推导）</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Impl 阶段（CPU 实现）</span></span><br><span class="line"><span class="comment">// 使用 TensorIterator 执行向量化计算</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="六、结构化内核-vs-非结构化内核的对比"><a href="#六、结构化内核-vs-非结构化内核的对比" class="headerlink" title="六、结构化内核 vs 非结构化内核的对比"></a>六、结构化内核 vs 非结构化内核的对比</h2><h3 id="6-1-add-操作的结构化实现"><a href="#6-1-add-操作的结构化实现" class="headerlink" title="6.1 add 操作的结构化实现"></a>6.1 add 操作的结构化实现</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># native_functions.yaml:578-594</span></span><br><span class="line"><span class="bullet">-</span> <span class="attr">func:</span> <span class="string">add.out(Tensor</span> <span class="string">self,</span> <span class="string">Tensor</span> <span class="string">other,</span> <span class="string">*,</span> <span class="string">Scalar</span> <span class="string">alpha=1,</span> <span class="string">Tensor(a!)</span> <span class="string">out)</span> <span class="string">-&gt;</span> <span class="string">Tensor(a!)</span></span><br><span class="line">  <span class="attr">structured:</span> <span class="literal">True</span></span><br><span class="line">  <span class="attr">structured_inherits:</span> <span class="string">TensorIteratorBase</span></span><br><span class="line">  <span class="attr">dispatch:</span></span><br><span class="line">    <span class="string">SparseCPU,</span> <span class="attr">SparseMeta:</span> <span class="string">add_out_sparse_cpu</span></span><br><span class="line">    <span class="attr">SparseCUDA:</span> <span class="string">add_out_sparse_cuda</span></span><br><span class="line">    <span class="string">...</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-2-为什么需要-structured-inherits-TensorIteratorBase？"><a href="#6-2-为什么需要-structured-inherits-TensorIteratorBase？" class="headerlink" title="6.2 为什么需要 structured_inherits: TensorIteratorBase？"></a>6.2 为什么需要 structured_inherits: TensorIteratorBase？</h3><p><code>TensorIteratorBase</code> 是 PyTorch 用来处理广播、类型提升、内存布局的基类。通过继承它，结构化内核可以：</p>
+<ol>
+<li><strong>复用 TensorIterator 的逻辑</strong>：处理 broadcast、type promotion 等</li>
+<li><strong>自动设置输出张量</strong>：无需手动创建输出张量</li>
+<li><strong>支持向量化操作</strong>：内置 SIMD 优化</li>
+</ol>
+<hr>
+<h2 id="七、元张量的应用场景"><a href="#七、元张量的应用场景" class="headerlink" title="七、元张量的应用场景"></a>七、元张量的应用场景</h2><h3 id="7-1-形状推断（Shape-Inference）"><a href="#7-1-形状推断（Shape-Inference）" class="headerlink" title="7.1 形状推断（Shape Inference）"></a>7.1 形状推断（Shape Inference）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="comment"># 在 Meta 设备上创建张量</span></span><br><span class="line">x = torch.empty(<span class="number">3</span>, <span class="number">4</span>, device=<span class="string">&#x27;meta&#x27;</span>)  <span class="comment"># 元张量</span></span><br><span class="line">y = torch.empty(<span class="number">4</span>, <span class="number">5</span>, device=<span class="string">&#x27;meta&#x27;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 执行操作（只计算形状，不分配数据）</span></span><br><span class="line">z = torch.matmul(x, y)</span><br><span class="line"><span class="built_in">print</span>(z.shape)  <span class="comment"># torch.Size([3, 5]) - 形状已推断</span></span><br><span class="line"><span class="built_in">print</span>(z.device)  <span class="comment"># meta</span></span><br><span class="line"><span class="comment"># z.data_ptr() == nullptr</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="7-2-模型导出时的静态分析"><a href="#7-2-模型导出时的静态分析" class="headerlink" title="7.2 模型导出时的静态分析"></a>7.2 模型导出时的静态分析</h3><p>在 TorchScript 导出或 <code>torch.export</code> 时，元张量用于：</p>
+<ol>
+<li>推断整个计算图的输出形状</li>
+<li>检查算子兼容性</li>
+<li>验证模型结构</li>
+</ol>
+<h3 id="7-3-编译器优化"><a href="#7-3-编译器优化" class="headerlink" title="7.3 编译器优化"></a>7.3 编译器优化</h3><p>如 PyTorch&#x2F;XLA (Lazy Tensor) 和 AOTAutograd，利用元张量进行：</p>
+<ol>
+<li><strong>延迟执行</strong>：先记录操作，再决定是否融合</li>
+<li><strong>符号形状追踪</strong>：支持动态形状的静态分析</li>
+</ol>
+<hr>
+<h2 id="八、当前状态与展望"><a href="#八、当前状态与展望" class="headerlink" title="八、当前状态与展望"></a>八、当前状态与展望</h2><h3 id="8-1-已迁移的算子"><a href="#8-1-已迁移的算子" class="headerlink" title="8.1 已迁移的算子"></a>8.1 已迁移的算子</h3><p>截至 PyTorch 2.12，大部分核心算子已迁移到结构化内核：</p>
+<table>
+<thead>
+<tr>
+<th>算子类型</th>
+<th>结构化状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Binary Ops</strong> (add, sub, mul, div)</td>
+<td>✅ 完全迁移</td>
+</tr>
+<tr>
+<td><strong>Unary Ops</strong> (sin, cos, exp)</td>
+<td>✅ 完全迁移</td>
+</tr>
+<tr>
+<td><strong>Reduction Ops</strong> (sum, mean, max)</td>
+<td>✅ 大部分迁移</td>
+</tr>
+<tr>
+<td><strong>Linear Algebra</strong> (matmul, mm)</td>
+<td>✅ 完全迁移</td>
+</tr>
+<tr>
+<td><strong>Sparse Ops</strong></td>
+<td>✅ 有专门的结构化实现</td>
+</tr>
+</tbody></table>
+<h3 id="8-2-仍在进行的工作"><a href="#8-2-仍在进行的工作" class="headerlink" title="8.2 仍在进行的工作"></a>8.2 仍在进行的工作</h3><ol>
+<li><strong>复杂算子迁移</strong>：一些复杂的算子（如卷积、池化）仍在迁移中</li>
+<li><strong>元张量测试完善</strong>：确保所有结构化内核都有正确的 Meta 实现</li>
+<li><strong>性能优化</strong>：确保结构化分派不会引入额外开销</li>
+</ol>
+<h3 id="8-3-未来方向"><a href="#8-3-未来方向" class="headerlink" title="8.3 未来方向"></a>8.3 未来方向</h3><ol>
+<li><strong>更统一的元张量支持</strong>：让所有算子都能在 Meta 设备上运行</li>
+<li><strong>自动 Meta 生成</strong>：通过代码生成，为没有显式 Meta 实现的算子自动生成</li>
+<li><strong>更好的错误信息</strong>：改进 Meta fallback 的错误提示，帮助开发者定位缺失的 Meta 实现</li>
+</ol>
+<hr>
+<h2 id="九、开发者指南"><a href="#九、开发者指南" class="headerlink" title="九、开发者指南"></a>九、开发者指南</h2><h3 id="9-1-如何判断一个算子是否支持元张量"><a href="#9-1-如何判断一个算子是否支持元张量" class="headerlink" title="9.1 如何判断一个算子是否支持元张量"></a>9.1 如何判断一个算子是否支持元张量</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="comment"># 方法 1：尝试在 meta 设备上运行</span></span><br><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    x = torch.ones(<span class="number">2</span>, <span class="number">3</span>, device=<span class="string">&#x27;meta&#x27;</span>)</span><br><span class="line">    y = torch.ones(<span class="number">2</span>, <span class="number">3</span>, device=<span class="string">&#x27;meta&#x27;</span>)</span><br><span class="line">    z = torch.mm(x, y)  <span class="comment"># 如果不支持，会报错</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;支持元张量&quot;</span>)</span><br><span class="line"><span class="keyword">except</span> RuntimeError <span class="keyword">as</span> e:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;不支持: <span class="subst">&#123;e&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 方法 2：检查是否有 Meta kernel 注册</span></span><br><span class="line"><span class="comment"># 查看 native_functions.yaml 中的 dispatch 字段</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="9-2-为自定义算子添加-Meta-支持"><a href="#9-2-为自定义算子添加-Meta-支持" class="headerlink" title="9.2 为自定义算子添加 Meta 支持"></a>9.2 为自定义算子添加 Meta 支持</h3><ol>
+<li><strong>在 native_functions.yaml 中声明为结构化</strong>：</li>
+</ol>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="bullet">-</span> <span class="attr">func:</span> <span class="string">my_op.out(Tensor</span> <span class="string">input,</span> <span class="string">Tensor(a!)</span> <span class="string">out)</span> <span class="string">-&gt;</span> <span class="string">Tensor(a!)</span></span><br><span class="line">  <span class="attr">structured:</span> <span class="literal">True</span></span><br><span class="line">  <span class="attr">structured_inherits:</span> <span class="string">TensorIteratorBase</span></span><br><span class="line">  <span class="attr">dispatch:</span></span><br><span class="line">    <span class="attr">CPU:</span> <span class="string">my_op_cpu_out</span></span><br><span class="line">    <span class="attr">Meta:</span> <span class="string">my_op_meta_out</span>  <span class="comment"># 必须提供 Meta 实现</span></span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li><strong>实现 Meta 函数</strong>：</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">TORCH_META_FUNC2</span>(my_op, out) (</span><br><span class="line">  <span class="type">const</span> Tensor&amp; input</span><br><span class="line">) &#123;</span><br><span class="line">  <span class="comment">// 设置输出形状和类型</span></span><br><span class="line">  <span class="built_in">set_output_raw_strided</span>(<span class="number">0</span>, input.<span class="built_in">sizes</span>(), input.<span class="built_in">strides</span>(), input.<span class="built_in">options</span>());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li><strong>实现 Meta 具体实现</strong>：</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Tensor <span class="title">my_op_meta_out</span><span class="params">(<span class="type">const</span> Tensor&amp; input)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 返回一个元张量</span></span><br><span class="line">  <span class="keyword">return</span> at::<span class="built_in">empty_meta_symint</span>(input.<span class="built_in">sizes</span>(), input.<span class="built_in">dtype</span>(), ...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="十、总结"><a href="#十、总结" class="headerlink" title="十、总结"></a>十、总结</h2><p>结构化内核和元张量是 PyTorch 演进过程中的重要里程碑：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>核心价值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>结构化内核</strong></td>
+<td>分离元数据和计算，减少代码重复，支持更清晰的算子接口</td>
+</tr>
+<tr>
+<td><strong>元张量</strong></td>
+<td>支持零成本形状推断，为编译器和动态优化提供基础</td>
+</tr>
+<tr>
+<td><strong>Dispatch 机制</strong></td>
+<td>统一的分派系统，支持多设备、多后端的灵活扩展</td>
+</tr>
+</tbody></table>
+<p>理解这两个概念，有助于深入理解 PyTorch 的内部工作原理，也为参与 PyTorch 开发和优化奠定了基础。</p>
+<hr>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>aten/src/ATen/TensorMeta.h</code></td>
+<td>结构化内核宏定义</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/native/native_functions.yaml</code></td>
+<td>结构化内核声明</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/native/BinaryOps.cpp</code></td>
+<td>结构化内核实现示例</td>
+</tr>
+<tr>
+<td><code>c10/core/DispatchKey.h</code></td>
+<td>DispatchKey 枚举</td>
+</tr>
+<tr>
+<td><code>c10/core/DeviceType.h</code></td>
+<td>设备类型定义</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/EmptyTensor.cpp</code></td>
+<td>Meta Allocator</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/core/MetaFallbackKernel.cpp</code></td>
+<td>Meta Fallback 处理</td>
+</tr>
+<tr>
+<td><code>torchgen/api/structured.py</code></td>
+<td>torchgen 的结构化内核处理</td>
+</tr>
+</tbody></table>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/">http://example.com/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_6.pytorch-cuda-intro/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch cuda intro
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_7.pytorch-functionalization/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch functionalization
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

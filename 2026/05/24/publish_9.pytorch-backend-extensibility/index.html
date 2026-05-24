@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch backend extensibility | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路引言：什么是后端可扩展性？在开始之前，我们需要先理解一个问题：为什么 PyTorch 的底层要用 C++？ Python 是一门解释型语言，它的”温柔”在于语法简洁、使用方便。但这种温柔是有代价的——每次执行一行代码，Python 都要”问”解释器：”这一步该做什么？”这种运行时解析带来了巨大的性能开销。 而 C++ 是一门编译型语">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch backend extensibility">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_9.pytorch-backend-extensibility/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路引言：什么是后端可扩展性？在开始之前，我们需要先理解一个问题：为什么 PyTorch 的底层要用 C++？ Python 是一门解释型语言，它的”温柔”在于语法简洁、使用方便。但这种温柔是有代价的——每次执行一行代码，Python 都要”问”解释器：”这一步该做什么？”这种运行时解析带来了巨大的性能开销。 而 C++ 是一门编译型语">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.209Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch backend extensibility
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%80%E4%B9%88%E6%98%AF%E5%90%8E%E7%AB%AF%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7%EF%BC%9F"><span class="toc-text">引言：什么是后端可扩展性？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7%E7%9A%84%E5%AE%9A%E4%B9%89"><span class="toc-text">后端可扩展性的定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Dispatcher%EF%BC%9A%E5%90%8E%E7%AB%AF%E8%B7%AF%E7%94%B1%E7%9A%84%E6%A0%B8%E5%BF%83"><span class="toc-text">一、Dispatcher：后端路由的核心</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-DispatchKey%EF%BC%9A%E5%90%8E%E7%AB%AF%E7%9A%84%E6%A0%87%E8%AF%86%E7%AC%A6"><span class="toc-text">1.1 DispatchKey：后端的标识符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E5%90%8E%E7%AB%AF%E4%BC%98%E5%85%88%E7%BA%A7%EF%BC%9A%E7%94%B1-bit-%E4%BD%8D%E7%BD%AE%E5%86%B3%E5%AE%9A"><span class="toc-text">1.2 后端优先级：由 bit 位置决定</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-PrivateUse1-2-3-%E9%AB%98%E4%BA%8E%E5%86%85%E7%BD%AE%E5%90%8E%E7%AB%AF%EF%BC%9F"><span class="toc-text">为什么 PrivateUse1&#x2F;2&#x2F;3 高于内置后端？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-Meta-%E8%A6%81%E6%94%BE%E5%9C%A8%E6%9C%80%E5%90%8E%EF%BC%9F"><span class="toc-text">为什么 Meta 要放在最后？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E8%B0%83%E5%BA%A6%E8%BF%87%E7%A8%8B"><span class="toc-text">1.3 调度过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-4-%E5%88%86%E5%8F%91%E8%A1%A8%E6%9F%A5%E6%89%BE%E7%AE%97%E6%B3%95"><span class="toc-text">1.4 分发表查找算法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%A1%88%E4%BE%8B%E4%B8%80%EF%BC%9A%E4%B8%8E-CUDA%E2%80%9D%E5%BD%A2%E4%BC%BC%E2%80%9D%E7%9A%84%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94AMD-ROCm"><span class="toc-text">二、案例一：与 CUDA”形似”的后端——AMD ROCm</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HIP%EF%BC%9ACUDA-%E7%9A%84%E2%80%9D%E8%A1%A8%E4%BA%B2%E2%80%9D"><span class="toc-text">HIP：CUDA 的”表亲”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ROCm-%E7%9A%84%E8%AE%BE%E5%A4%87%E6%A3%80%E6%B5%8B"><span class="toc-text">ROCm 的设备检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BF%9D%E6%8C%81%E2%80%9Dcuda%E2%80%9D%E5%90%8D%E7%A7%B0%E7%9A%84%E2%80%9D%E6%8A%98%E4%B8%AD%E2%80%9D%E6%96%B9%E6%A1%88"><span class="toc-text">保持”cuda”名称的”折中”方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%A1%88%E4%BE%8B%E4%BA%8C%EF%BC%9A%E4%B8%8E-CUDA%E2%80%9D%E7%A5%9E%E5%BC%82%E2%80%9D%E7%9A%84%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94Google-XLA"><span class="toc-text">三、案例二：与 CUDA”神异”的后端——Google XLA</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA-%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8C%BA%E5%88%AB%EF%BC%9A%E6%83%B0%E6%80%A7%E6%B1%82%E5%80%BC-vs-%E7%AB%8B%E5%8D%B3%E6%B1%82%E5%80%BC"><span class="toc-text">XLA 的核心区别：惰性求值 vs 立即求值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E6%B1%82%E5%80%BC%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">惰性求值的实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA-%E7%9A%84%E5%90%8E%E7%AB%AF%E8%AE%BE%E5%A4%87%E6%8A%BD%E8%B1%A1"><span class="toc-text">XLA 的后端设备抽象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-%E5%9B%9E%E9%80%80%E6%9C%BA%E5%88%B6"><span class="toc-text">CPU 回退机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%A1%88%E4%BE%8B%E4%B8%89%EF%BC%9A%E8%87%AA%E5%AE%9A%E4%B9%89%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94PrivateUse1-%E5%AE%8C%E6%95%B4%E6%8C%87%E5%8D%97"><span class="toc-text">四、案例三：自定义后端——PrivateUse1 完整指南</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-PrivateUse1%EF%BC%9F"><span class="toc-text">4.1 为什么需要 PrivateUse1？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0%E7%A4%BA%E4%BE%8B"><span class="toc-text">4.2 完整实现示例</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-1%EF%BC%9A%E6%B3%A8%E5%86%8C-C-%E7%AE%97%E5%AD%90"><span class="toc-text">步骤 1：注册 C++ 算子</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-2%EF%BC%9A%E6%B3%A8%E5%86%8C-Device-Guard"><span class="toc-text">步骤 2：注册 Device Guard</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-3%EF%BC%9A%E6%B3%A8%E5%86%8C-Allocator"><span class="toc-text">步骤 3：注册 Allocator</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-Python-%E7%AB%AF%E6%B3%A8%E5%86%8C"><span class="toc-text">4.3 Python 端注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-4-%E6%94%AF%E6%8C%81-torch-compile%EF%BC%88%E5%9B%BE%E7%BC%96%E8%AF%91%E6%A8%A1%E5%BC%8F%EF%BC%89"><span class="toc-text">4.4 支持 torch.compile（图编译模式）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-5-%E5%85%B3%E9%94%AE-API-%E6%80%BB%E7%BB%93"><span class="toc-text">4.5 关键 API 总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81Codegen%EF%BC%9A%E8%83%B6%E6%B0%B4%E4%BB%A3%E7%A0%81%E7%9A%84%E8%87%AA%E5%8A%A8%E5%8C%96%E7%94%9F%E6%88%90"><span class="toc-text">五、Codegen：胶水代码的自动化生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-Codegen%EF%BC%9F"><span class="toc-text">5.1 为什么需要 Codegen？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-native-functions-yaml%EF%BC%9A%E7%AE%97%E5%AD%90%E5%AE%9A%E4%B9%89"><span class="toc-text">5.2 native_functions.yaml：算子定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-torchgen%EF%BC%9APython-%E7%AB%AF%E7%9A%84-Codegen-%E6%A8%A1%E5%9E%8B"><span class="toc-text">5.3 torchgen：Python 端的 Codegen 模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-Codegen-%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">5.4 Codegen 工作流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%90%8E%E7%AB%AF%E6%89%A9%E5%B1%95%E7%9A%84%E6%8C%91%E6%88%98%EF%BC%9A%E6%B0%B8%E4%B8%8D%E5%81%9C%E6%AD%87%E7%9A%84%E2%80%9D%E8%B7%91%E6%AD%A5%E6%9C%BA%E2%80%9D"><span class="toc-text">六、后端扩展的挑战：永不停歇的”跑步机”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%BE%E5%90%8D%E5%8F%98%E6%9B%B4%E7%9A%84%E7%A0%B4%E5%9D%8F%E6%80%A7"><span class="toc-text">签名变更的破坏性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CI-%E9%9B%86%E6%88%90%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-text">CI 集成的重要性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BackendImplInterface%EF%BC%9A%E5%90%8E%E7%AB%AF%E6%8E%A5%E5%8F%A3%E6%8A%BD%E8%B1%A1"><span class="toc-text">BackendImplInterface：后端接口抽象</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6%E5%8F%82%E8%80%83"><span class="toc-text">七、核心文件参考</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-text">八、总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%BB%80%E4%B9%88%E6%98%AF%E5%90%8E%E7%AB%AF%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7%EF%BC%9F"><span class="toc-text">引言：什么是后端可扩展性？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7%E7%9A%84%E5%AE%9A%E4%B9%89"><span class="toc-text">后端可扩展性的定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Dispatcher%EF%BC%9A%E5%90%8E%E7%AB%AF%E8%B7%AF%E7%94%B1%E7%9A%84%E6%A0%B8%E5%BF%83"><span class="toc-text">一、Dispatcher：后端路由的核心</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-DispatchKey%EF%BC%9A%E5%90%8E%E7%AB%AF%E7%9A%84%E6%A0%87%E8%AF%86%E7%AC%A6"><span class="toc-text">1.1 DispatchKey：后端的标识符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E5%90%8E%E7%AB%AF%E4%BC%98%E5%85%88%E7%BA%A7%EF%BC%9A%E7%94%B1-bit-%E4%BD%8D%E7%BD%AE%E5%86%B3%E5%AE%9A"><span class="toc-text">1.2 后端优先级：由 bit 位置决定</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-PrivateUse1-2-3-%E9%AB%98%E4%BA%8E%E5%86%85%E7%BD%AE%E5%90%8E%E7%AB%AF%EF%BC%9F"><span class="toc-text">为什么 PrivateUse1&#x2F;2&#x2F;3 高于内置后端？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-Meta-%E8%A6%81%E6%94%BE%E5%9C%A8%E6%9C%80%E5%90%8E%EF%BC%9F"><span class="toc-text">为什么 Meta 要放在最后？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E8%B0%83%E5%BA%A6%E8%BF%87%E7%A8%8B"><span class="toc-text">1.3 调度过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-4-%E5%88%86%E5%8F%91%E8%A1%A8%E6%9F%A5%E6%89%BE%E7%AE%97%E6%B3%95"><span class="toc-text">1.4 分发表查找算法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%A1%88%E4%BE%8B%E4%B8%80%EF%BC%9A%E4%B8%8E-CUDA%E2%80%9D%E5%BD%A2%E4%BC%BC%E2%80%9D%E7%9A%84%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94AMD-ROCm"><span class="toc-text">二、案例一：与 CUDA”形似”的后端——AMD ROCm</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HIP%EF%BC%9ACUDA-%E7%9A%84%E2%80%9D%E8%A1%A8%E4%BA%B2%E2%80%9D"><span class="toc-text">HIP：CUDA 的”表亲”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ROCm-%E7%9A%84%E8%AE%BE%E5%A4%87%E6%A3%80%E6%B5%8B"><span class="toc-text">ROCm 的设备检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BF%9D%E6%8C%81%E2%80%9Dcuda%E2%80%9D%E5%90%8D%E7%A7%B0%E7%9A%84%E2%80%9D%E6%8A%98%E4%B8%AD%E2%80%9D%E6%96%B9%E6%A1%88"><span class="toc-text">保持”cuda”名称的”折中”方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%A1%88%E4%BE%8B%E4%BA%8C%EF%BC%9A%E4%B8%8E-CUDA%E2%80%9D%E7%A5%9E%E5%BC%82%E2%80%9D%E7%9A%84%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94Google-XLA"><span class="toc-text">三、案例二：与 CUDA”神异”的后端——Google XLA</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA-%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8C%BA%E5%88%AB%EF%BC%9A%E6%83%B0%E6%80%A7%E6%B1%82%E5%80%BC-vs-%E7%AB%8B%E5%8D%B3%E6%B1%82%E5%80%BC"><span class="toc-text">XLA 的核心区别：惰性求值 vs 立即求值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E6%B1%82%E5%80%BC%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-text">惰性求值的实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#XLA-%E7%9A%84%E5%90%8E%E7%AB%AF%E8%AE%BE%E5%A4%87%E6%8A%BD%E8%B1%A1"><span class="toc-text">XLA 的后端设备抽象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-%E5%9B%9E%E9%80%80%E6%9C%BA%E5%88%B6"><span class="toc-text">CPU 回退机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%A1%88%E4%BE%8B%E4%B8%89%EF%BC%9A%E8%87%AA%E5%AE%9A%E4%B9%89%E5%90%8E%E7%AB%AF%E2%80%94%E2%80%94PrivateUse1-%E5%AE%8C%E6%95%B4%E6%8C%87%E5%8D%97"><span class="toc-text">四、案例三：自定义后端——PrivateUse1 完整指南</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-PrivateUse1%EF%BC%9F"><span class="toc-text">4.1 为什么需要 PrivateUse1？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0%E7%A4%BA%E4%BE%8B"><span class="toc-text">4.2 完整实现示例</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-1%EF%BC%9A%E6%B3%A8%E5%86%8C-C-%E7%AE%97%E5%AD%90"><span class="toc-text">步骤 1：注册 C++ 算子</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-2%EF%BC%9A%E6%B3%A8%E5%86%8C-Device-Guard"><span class="toc-text">步骤 2：注册 Device Guard</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A5%E9%AA%A4-3%EF%BC%9A%E6%B3%A8%E5%86%8C-Allocator"><span class="toc-text">步骤 3：注册 Allocator</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-Python-%E7%AB%AF%E6%B3%A8%E5%86%8C"><span class="toc-text">4.3 Python 端注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-4-%E6%94%AF%E6%8C%81-torch-compile%EF%BC%88%E5%9B%BE%E7%BC%96%E8%AF%91%E6%A8%A1%E5%BC%8F%EF%BC%89"><span class="toc-text">4.4 支持 torch.compile（图编译模式）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-5-%E5%85%B3%E9%94%AE-API-%E6%80%BB%E7%BB%93"><span class="toc-text">4.5 关键 API 总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81Codegen%EF%BC%9A%E8%83%B6%E6%B0%B4%E4%BB%A3%E7%A0%81%E7%9A%84%E8%87%AA%E5%8A%A8%E5%8C%96%E7%94%9F%E6%88%90"><span class="toc-text">五、Codegen：胶水代码的自动化生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-Codegen%EF%BC%9F"><span class="toc-text">5.1 为什么需要 Codegen？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-native-functions-yaml%EF%BC%9A%E7%AE%97%E5%AD%90%E5%AE%9A%E4%B9%89"><span class="toc-text">5.2 native_functions.yaml：算子定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-torchgen%EF%BC%9APython-%E7%AB%AF%E7%9A%84-Codegen-%E6%A8%A1%E5%9E%8B"><span class="toc-text">5.3 torchgen：Python 端的 Codegen 模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-Codegen-%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">5.4 Codegen 工作流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%90%8E%E7%AB%AF%E6%89%A9%E5%B1%95%E7%9A%84%E6%8C%91%E6%88%98%EF%BC%9A%E6%B0%B8%E4%B8%8D%E5%81%9C%E6%AD%87%E7%9A%84%E2%80%9D%E8%B7%91%E6%AD%A5%E6%9C%BA%E2%80%9D"><span class="toc-text">六、后端扩展的挑战：永不停歇的”跑步机”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%BE%E5%90%8D%E5%8F%98%E6%9B%B4%E7%9A%84%E7%A0%B4%E5%9D%8F%E6%80%A7"><span class="toc-text">签名变更的破坏性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CI-%E9%9B%86%E6%88%90%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-text">CI 集成的重要性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BackendImplInterface%EF%BC%9A%E5%90%8E%E7%AB%AF%E6%8E%A5%E5%8F%A3%E6%8A%BD%E8%B1%A1"><span class="toc-text">BackendImplInterface：后端接口抽象</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6%E5%8F%82%E8%80%83"><span class="toc-text">七、核心文件参考</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-text">八、总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路"><a href="#深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路" class="headerlink" title="深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路"></a>深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路</h1><h2 id="引言：什么是后端可扩展性？"><a href="#引言：什么是后端可扩展性？" class="headerlink" title="引言：什么是后端可扩展性？"></a>引言：什么是后端可扩展性？</h2><p>在开始之前，我们需要先理解一个问题：<strong>为什么 PyTorch 的底层要用 C++？</strong></p>
+<p>Python 是一门解释型语言，它的”温柔”在于语法简洁、使用方便。但这种温柔是有代价的——每次执行一行代码，Python 都要”问”解释器：”这一步该做什么？”这种运行时解析带来了巨大的性能开销。</p>
+<p>而 C++ 是一门编译型语言，代码在运行前就已经被翻译成机器能直接执行的指令，没有中间商赚差价。</p>
+<p>对于深度学习中的矩阵运算这种”简单粗暴”的计算密集型任务，Python 的灵活性反而成了负担。</p>
+<h3 id="后端可扩展性的定义"><a href="#后端可扩展性的定义" class="headerlink" title="后端可扩展性的定义"></a>后端可扩展性的定义</h3><p>PyTorch 作为一个深度学习框架，其核心使命之一就是提供 GPU 加速。如果没有 GPU 加速，我们或许可以直接使用 NumPy 来完成大部分工作。GPU 加速意味着同样一套 Python 代码，不仅可以在 CPU 上运行，还可以在像 CUDA 这样的强大硬件上运行。</p>
+<p>在 PyTorch 的语境中，我们将这些不同的计算平台（如 CPU、NVIDIA GPU、AMD GPU、TPU）称为”后端（Backend）”。</p>
+<p>在 PyTorch 项目初期，只有两种官方支持的后端：CPU 和 CUDA。这可以追溯到它的前身 Torch7（以及更早的 LuaTorch）时代，当时主要由 TH（CPU 张量库）和 THC（CUDA 张量库）这两个库主导。</p>
+<p>然而，随着时间的推移，越来越多的硬件厂商和研究机构希望将他们自己的硬件或加速器与 PyTorch 集成。这就引出了我们今天的主题——<strong>如何让 PyTorch 能够灵活地接入更多、更多样化的后端？</strong></p>
+<hr>
+<h2 id="一、Dispatcher：后端路由的核心"><a href="#一、Dispatcher：后端路由的核心" class="headerlink" title="一、Dispatcher：后端路由的核心"></a>一、Dispatcher：后端路由的核心</h2><p>在深入案例之前，我们需要理解 PyTorch 是如何将一个操作（如 <code>torch.add</code>）路由到正确的后端的。这就要提到 <strong>Dispatcher</strong>。</p>
+<p><a href="aten/src/ATen/core/dispatch/Dispatcher.h#L1-L50">aten&#x2F;src&#x2F;ATen&#x2F;core&#x2F;dispatch&#x2F;Dispatcher.h:1-50</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">TORCH_API</span> Dispatcher <span class="keyword">final</span> &#123;</span><br><span class="line">  <span class="comment">// Access to backend fallback information</span></span><br><span class="line">  <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">impl</span>::OperatorEntry;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Per-operator dispatch tables stored as OperatorDef list</span></span><br><span class="line">  std::list&lt;OperatorDef&gt; operators_;</span><br><span class="line">  ska::flat_hash_map&lt;OperatorName, OperatorHandle&gt; operatorLookupTable_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Backend fallback kernels for when no concrete kernel exists</span></span><br><span class="line">  std::array&lt;impl::AnnotatedKernel, num_runtime_entries&gt; backendFallbackKernels_;</span><br></pre></td></tr></table></figure>
+
+<p>Dispatcher 是单例模式（<code>realSingleton()</code>），管理所有算子的注册和路由。</p>
+<h3 id="1-1-DispatchKey：后端的标识符"><a href="#1-1-DispatchKey：后端的标识符" class="headerlink" title="1.1 DispatchKey：后端的标识符"></a>1.1 DispatchKey：后端的标识符</h3><p><a href="c10/core/DispatchKey.h#L36-L52">c10&#x2F;core&#x2F;DispatchKey.h:36-52</a></p>
+<p>每个后端都有一个唯一的 <code>DispatchKey</code> 标识符：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> C10_FORALL_BACKEND_COMPONENTS(_, extra) \</span></span><br><span class="line"><span class="meta">  _(CPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(CUDA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(HIP, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(XLA, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(MPS, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(IPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(XPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(HPU, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(VE, extra)                                 \</span></span><br><span class="line"><span class="meta">  _(Lazy, extra)                                \</span></span><br><span class="line"><span class="meta">  _(MTIA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(MAIA, extra)                                \</span></span><br><span class="line"><span class="meta">  _(PrivateUse1, extra)                         \</span></span><br><span class="line"><span class="meta">  _(PrivateUse2, extra)                         \</span></span><br><span class="line"><span class="meta">  _(PrivateUse3, extra)                         \</span></span><br><span class="line"><span class="meta">  _(Meta, extra)</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-后端优先级：由-bit-位置决定"><a href="#1-2-后端优先级：由-bit-位置决定" class="headerlink" title="1.2 后端优先级：由 bit 位置决定"></a>1.2 后端优先级：由 bit 位置决定</h3><p><a href="c10/core/DispatchKey.h#L109-L112">c10&#x2F;core&#x2F;DispatchKey.h:109-112</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Higher bit indexes get handled by dispatching first</span></span><br><span class="line"><span class="comment">// (because we &#x27;count leading zeros&#x27; when we extract the highest priority dispatch key.)</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>关键规则</strong>：</p>
+<ol>
+<li><strong>DispatchKey 在 enum 中的位置</strong>决定了它的优先级——越靠后的 DispatchKey，优先级越高</li>
+<li><strong>bit 位置</strong>决定了调度顺序——Higher bit indexes &#x3D; higher priority</li>
+</ol>
+<p><strong>实际的优先级顺序</strong>（从高到低）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Meta &gt; PrivateUse3 &gt; PrivateUse2 &gt; PrivateUse1 &gt; ... &gt; MTIA &gt; MAIA &gt; Lazy &gt; VE &gt; HPU &gt; XPU &gt; IPU &gt; MPS &gt; XLA &gt; HIP &gt; CUDA &gt; CPU</span><br></pre></td></tr></table></figure>
+
+<h3 id="为什么-PrivateUse1-2-3-高于内置后端？"><a href="#为什么-PrivateUse1-2-3-高于内置后端？" class="headerlink" title="为什么 PrivateUse1&#x2F;2&#x2F;3 高于内置后端？"></a>为什么 PrivateUse1&#x2F;2&#x2F;3 高于内置后端？</h3><p><a href="c10/core/DispatchKey.h#L27-L30">c10&#x2F;core&#x2F;DispatchKey.h:27-30</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// WARNING! If you add a new backend component to the end of this list,</span></span><br><span class="line"><span class="comment">// make sure you register it before Meta. Meta must be at the end so that</span></span><br><span class="line"><span class="comment">// meta key in tls triggers meta kernels.</span></span><br><span class="line"><span class="comment">// (But you shouldn&#x27;t: private use keys should have higher precedence than all built-in keys)</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>设计意图</strong>：</p>
+<ul>
+<li><strong>PrivateUse1&#x2F;2&#x2F;3</strong>：供用户自定义后端使用，优先级高意味着用户可以实现自己的后端并覆盖内置后端的默认行为</li>
+<li><strong>Meta</strong>：用于”元张量”（meta tensors），即只有 shape&#x2F;dtype 信息但没有实际数据的张量。主要用于<strong>形状推导</strong>和<strong>编译时分析</strong>，不应该真正执行计算</li>
+</ul>
+<h3 id="为什么-Meta-要放在最后？"><a href="#为什么-Meta-要放在最后？" class="headerlink" title="为什么 Meta 要放在最后？"></a>为什么 Meta 要放在最后？</h3><p><a href="c10/core/DispatchKey.h#L27-L30">c10&#x2F;core&#x2F;DispatchKey.h:27-30</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// WARNING! If you add a new backend component to the end of this list,</span></span><br><span class="line"><span class="comment">// make sure you register it before Meta. Meta must be at the end so that</span></span><br><span class="line"><span class="comment">// meta key in tls triggers meta kernels.</span></span><br><span class="line"><span class="comment">// (But you shouldn&#x27;t: private use keys should have higher precedence than all built-in keys)</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>核心原因</strong>：Meta 必须放在最后，以确保<strong>显式设置 Meta 时一定能触发 Meta 内核</strong>。</p>
+<p><strong>关键理解</strong>：这里的”最后”是针对<strong>后端组件（BackendComponent）</strong>的排列顺序，而不是”兜底”或”最后才用”的意思。</p>
+<ol>
+<li><strong>Meta 是特殊的后端</strong>：它不代表真正的计算硬件，而是用于<strong>元张量（meta tensors）</strong>——只有 shape&#x2F;dtype，没有实际数据</li>
+<li><strong>形状推导的场景</strong>：当你只需要推导输出形状而不需要真正计算时，会使用 Meta 后端</li>
+<li>**Thread Local Storage (TLS)**：当在 TLS 中显式设置了 Meta key 时，需要确保 Meta 内核被触发</li>
+</ol>
+<p><strong>实际的优先级顺序</strong>（从高到低）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Meta（显式设置时优先）&gt; PrivateUse3 &gt; PrivateUse2 &gt; PrivateUse1 &gt; ... &gt; CPU</span><br></pre></td></tr></table></figure>
+
+<p><strong>举例说明</strong>：在结构性内核（structured kernels）中，meta 函数用于形状推导：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">TORCH_META_FUNC2</span>(add, Tensor) (</span><br><span class="line">  <span class="type">const</span> Tensor&amp; self, <span class="type">const</span> Tensor&amp; other, <span class="type">const</span> Scalar&amp; alpha</span><br><span class="line">) &#123;</span><br><span class="line">  <span class="comment">// Meta 后端只计算输出形状，不分配内存</span></span><br><span class="line">  <span class="built_in">build_borrowing_binary_op</span>(<span class="built_in">maybe_get_output</span>(), self, other);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时 <code>maybe_get_output()</code> 返回的 tensor 实际上是由 Meta 后端管理的，它的 shape 信息被计算出来，但 <code>data_ptr()</code> 为 <code>nullptr</code>。</p>
+<p><strong>注意</strong>：Meta 后端并不是”最后兜底”的实现。真正的”最后兜底”是 <code>Backend fallback</code> 机制——当没有任何后端（包括 Meta）提供实现时，PyTorch 会调用后端回退函数（通常是 CPU 实现）。</p>
+<h3 id="1-3-调度过程"><a href="#1-3-调度过程" class="headerlink" title="1.3 调度过程"></a>1.3 调度过程</h3><p><a href="aten/src/ATen/core/dispatch/Dispatcher.h#L789">aten&#x2F;src&#x2F;ATen&#x2F;core&#x2F;dispatch&#x2F;Dispatcher.h:789</a></p>
+<p>当执行一个操作时，Dispatcher 通过查找分发表来确定使用哪个后端的实现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> KernelFunction&amp; kernel = op.operatorDef_-&gt;op.<span class="built_in">lookup</span>(dispatchKeySet);</span><br></pre></td></tr></table></figure>
+
+<p>关键机制是 <code>lookup</code> 函数，它根据 <code>DispatchKeySet</code>（一组调度键）找到正确的内核函数。</p>
+<h3 id="1-4-分发表查找算法"><a href="#1-4-分发表查找算法" class="headerlink" title="1.4 分发表查找算法"></a>1.4 分发表查找算法</h3><p><a href="aten/src/ATen/core/dispatch/OperatorEntry.cpp#L352-L471">aten&#x2F;src&#x2F;ATen&#x2F;core&#x2F;dispatch&#x2F;OperatorEntry.cpp:352-471</a></p>
+<p>dispatch table entry 的计算优先级顺序：</p>
+<ol>
+<li><strong>直接注册</strong>：直接注册到某个 dispatch key 的实现</li>
+<li><strong>别名回退</strong>（按顺序）：<ul>
+<li><code>CompositeExplicitAutogradNonFunctional</code></li>
+<li><code>CompositeExplicitAutograd</code></li>
+<li><code>CompositeImplicitAutograd</code></li>
+<li><code>Autograd</code></li>
+<li><code>FuncTorchBatchedDecomposition</code></li>
+</ul>
+</li>
+<li><strong>Backend fallback</strong>：后端回退函数</li>
+<li><strong>Missing kernel</strong>：报错</li>
+</ol>
+<p>当所有上述方式都无法找到实现时，才会报 “missing kernel” 错误。</p>
+<hr>
+<h2 id="二、案例一：与-CUDA”形似”的后端——AMD-ROCm"><a href="#二、案例一：与-CUDA”形似”的后端——AMD-ROCm" class="headerlink" title="二、案例一：与 CUDA”形似”的后端——AMD ROCm"></a>二、案例一：与 CUDA”形似”的后端——AMD ROCm</h2><p>PyTorch 的架构最初是为 CPU 和 CUDA 量身定做的。因此，如果一个新的后端在设计上与 CUDA 非常相似，那么集成过程就会相对顺利。AMD 的 ROCm 平台（及其 HIP 编程语言）就是一个绝佳的例子。</p>
+<h3 id="HIP：CUDA-的”表亲”"><a href="#HIP：CUDA-的”表亲”" class="headerlink" title="HIP：CUDA 的”表亲”"></a>HIP：CUDA 的”表亲”</h3><p>CUDA 是 NVIDIA 的专有技术，只能运行在 NVIDIA 的 GPU 上。而 AMD 作为另一家主要的 GPU 制造商，也推出了自己的通用计算平台 ROCm。为了快速追赶 NVIDIA 在软件生态上长达十年的领先优势，AMD 采取了一种非常聪明的策略：<strong>尽可能地模仿 CUDA</strong>。</p>
+<p>ROCm 中的 HIP 语言在语法和 API 上与 CUDA 高度相似。这使得 PyTorch 在支持 AMD GPU 时，可以走一条捷径——PyTorch 编写的 CUDA 内核（Kernel），可以通过一个名为 <code>hipify</code> 的脚本，自动地被”转译”成 HIP 内核。</p>
+<h3 id="ROCm-的设备检测"><a href="#ROCm-的设备检测" class="headerlink" title="ROCm 的设备检测"></a>ROCm 的设备检测</h3><p><a href="aten/src/ATen/DeviceAccelerator.cpp">aten&#x2F;src&#x2F;ATen&#x2F;DeviceAccelerator.cpp</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">isAccelerator</span><span class="params">(c10::DeviceType device_type)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">switch</span> (device_type) &#123;</span><br><span class="line">    <span class="keyword">case</span> at::kCUDA:</span><br><span class="line">    <span class="keyword">case</span> at::kMTIA:</span><br><span class="line">    <span class="keyword">case</span> at::kXPU:</span><br><span class="line">    <span class="keyword">case</span> at::kHIP:    <span class="comment">// &lt;-- HIP/ROCm support</span></span><br><span class="line">    <span class="keyword">case</span> at::kMPS:</span><br><span class="line">    <span class="keyword">case</span> at::kHPU:</span><br><span class="line">    <span class="keyword">case</span> at::kPrivateUse1:</span><br><span class="line">      <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">      <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="保持”cuda”名称的”折中”方案"><a href="#保持”cuda”名称的”折中”方案" class="headerlink" title="保持”cuda”名称的”折中”方案"></a>保持”cuda”名称的”折中”方案</h3><p>为了最大程度地复用已有的代码和测试（这些代码和测试都是围绕 <code>cuda</code> 这个标识符编写的），AMD 版本的 PyTorch 在用户 API 层面保留了 <code>cuda</code> 的名称。这意味着，当你使用一个为 AMD GPU 特殊编译的 PyTorch 时，你仍然会调用 <code>.cuda()</code> 方法来将张量移动到 AMD 的 GPU 上。</p>
+<hr>
+<h2 id="三、案例二：与-CUDA”神异”的后端——Google-XLA"><a href="#三、案例二：与-CUDA”神异”的后端——Google-XLA" class="headerlink" title="三、案例二：与 CUDA”神异”的后端——Google XLA"></a>三、案例二：与 CUDA”神异”的后端——Google XLA</h2><p>并非所有后端都像 ROCm 那样与 CUDA 相似。Google 的 XLA（Accelerated Linear Algebra）就是一个完全不同的例子，它的集成也揭示了 PyTorch 后端扩展的更深层次机制。</p>
+<h3 id="XLA-的核心区别：惰性求值-vs-立即求值"><a href="#XLA-的核心区别：惰性求值-vs-立即求值" class="headerlink" title="XLA 的核心区别：惰性求值 vs 立即求值"></a>XLA 的核心区别：惰性求值 vs 立即求值</h3><p><strong>注意</strong>：PyTorch 2.0 之后，CUDA 也可以通过 <code>torch.compile</code> 使用图模式优化（Dynamo + Inductor）。所以 XLA 和 CUDA 的核心区别不是”能否图模式”，而是<strong>求值策略</strong>的不同：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>CUDA</th>
+<th>XLA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>求值策略</strong></td>
+<td>立即执行（Eager）</td>
+<td>惰性执行（Lazy）</td>
+</tr>
+<tr>
+<td><strong>同步时机</strong></td>
+<td>隐式同步，结果立即可见</td>
+<td>需要显式同步（如 <code>xm.mark_step()</code>）</td>
+</tr>
+<tr>
+<td><strong>内存分配</strong></td>
+<td>同步分配，立即知道 shape</td>
+<td>延迟分配，shape 通过 build() 推理</td>
+</tr>
+<tr>
+<td><strong>图构建方式</strong></td>
+<td>Dynamo 捕获 FX 图</td>
+<td>XLA 自己维护计算图</td>
+</tr>
+</tbody></table>
+<h3 id="惰性求值的实现"><a href="#惰性求值的实现" class="headerlink" title="惰性求值的实现"></a>惰性求值的实现</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// XLA 的操作不会立即执行，而是记录到图中</span></span><br><span class="line">c = a + b;  <span class="comment">// 只是往计算图加了一个节点</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 只有在需要结果时（打印、同步）才真正执行</span></span><br><span class="line"><span class="built_in">print</span>(c);   <span class="comment">// 此时触发编译和执行</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>关键区别</strong>：CUDA 操作执行后会立即同步结果；XLA 操作只是往图中添加节点，真正的计算延迟到同步时刻。</p>
+<p>这意味着 XLA 有机会在真正执行前：</p>
+<ol>
+<li>看到完整的计算图</li>
+<li>进行跨节点优化</li>
+<li>融合算子减少内存访问</li>
+</ol>
+<h3 id="XLA-的后端设备抽象"><a href="#XLA-的后端设备抽象" class="headerlink" title="XLA 的后端设备抽象"></a>XLA 的后端设备抽象</h3><p><a href="torch/csrc/lazy/backend/backend_device.cpp">torch&#x2F;csrc&#x2F;lazy&#x2F;backend&#x2F;backend_device.cpp</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">BackendDevice <span class="title">atenDeviceToBackendDevice</span><span class="params">(<span class="type">const</span> c10::Device&amp; device)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">TORCH_CHECK</span>(device.<span class="built_in">type</span>() == at::kLazy, device);</span><br><span class="line">  <span class="type">int64_t</span> ordinal = device.<span class="built_in">has_index</span>()</span><br><span class="line">      ? device.<span class="built_in">index</span>()</span><br><span class="line">      : <span class="built_in">getBackend</span>()-&gt;<span class="built_in">GetDefaultDeviceOrdinal</span>();</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">BackendDevice</span>(<span class="built_in">getBackend</span>()-&gt;<span class="built_in">GetDefaultDeviceType</span>(), ordinal);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">c10::Device <span class="title">backendDeviceToAtenDevice</span><span class="params">(<span class="type">const</span> BackendDevice&amp; device)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> c10::<span class="built_in">Device</span>(</span><br><span class="line">      at::kLazy, <span class="built_in">static_cast</span>&lt;c10::DeviceIndex&gt;(device.<span class="built_in">ordinal</span>()));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="CPU-回退机制"><a href="#CPU-回退机制" class="headerlink" title="CPU 回退机制"></a>CPU 回退机制</h3><p><a href="torch/csrc/lazy/ts_backend/ts_eager_fallback.cpp#L197-L205">torch&#x2F;csrc&#x2F;lazy&#x2F;ts_backend&#x2F;ts_eager_fallback.cpp:197-205</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">register_ts_ltc_eager_fallback</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="type">static</span> <span class="keyword">auto</span> m = <span class="built_in">MAKE_TORCH_LIBRARY_IMPL</span>(_, Lazy);</span><br><span class="line">  m.<span class="built_in">fallback</span>(torch::CppFunction::<span class="built_in">makeFromBoxedFunction</span>&lt;&amp;ltc_eager_fallback&gt;());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>当遇到一个 XLA 本身不支持的 PyTorch 算子时，XLA 后端会执行回退（fallback）操作：</p>
+<ol>
+<li>将相关的张量数据拉回到 CPU</li>
+<li>调用 PyTorch 原生的 CPU 实现来完成计算</li>
+<li>将结果传回 XLA 设备</li>
+</ol>
+<hr>
+<h2 id="四、案例三：自定义后端——PrivateUse1-完整指南"><a href="#四、案例三：自定义后端——PrivateUse1-完整指南" class="headerlink" title="四、案例三：自定义后端——PrivateUse1 完整指南"></a>四、案例三：自定义后端——PrivateUse1 完整指南</h2><p>PyTorch 提供了三个”私有后端”槽位（PrivateUse1&#x2F;2&#x2F;3），允许开发者注册自己的自定义后端。这对于研究性质的后端或者企业内部的后端特别有用。</p>
+<h3 id="4-1-为什么需要-PrivateUse1？"><a href="#4-1-为什么需要-PrivateUse1？" class="headerlink" title="4.1 为什么需要 PrivateUse1？"></a>4.1 为什么需要 PrivateUse1？</h3><p><a href="c10/core/DispatchKey.h#L49-L51">c10&#x2F;core&#x2F;DispatchKey.h:49-51</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">_(PrivateUse1, extra)                         \</span><br><span class="line">_(PrivateUse2, extra)                         \</span><br><span class="line">_(PrivateUse3, extra)                         \</span><br></pre></td></tr></table></figure>
+
+<p>这三个后端是<strong>完全由用户定义的</strong>：</p>
+<ul>
+<li>PyTorch 核心代码不会为其实现任何算子</li>
+<li>用户可以自由地将任何算子注册到这些后端</li>
+<li>优先级高于内置后端（除了 Meta）</li>
+</ul>
+<h3 id="4-2-完整实现示例"><a href="#4-2-完整实现示例" class="headerlink" title="4.2 完整实现示例"></a>4.2 完整实现示例</h3><p>以下是一个自定义后端的完整实现（基于 PyTorch 测试代码）：</p>
+<h4 id="步骤-1：注册-C-算子"><a href="#步骤-1：注册-C-算子" class="headerlink" title="步骤 1：注册 C++ 算子"></a>步骤 1：注册 C++ 算子</h4><p><a href="test/cpp_extensions/open_registration_extension.cpp#L85-L108">test&#x2F;cpp_extensions&#x2F;open_registration_extension.cpp:85-108</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 使用 TORCH_LIBRARY_IMPL 注册算子到 PrivateUse1</span></span><br><span class="line"><span class="built_in">TORCH_LIBRARY_IMPL</span>(aten, PrivateUse1, m) &#123;</span><br><span class="line">  m.<span class="built_in">impl</span>(<span class="string">&quot;add.Tensor&quot;</span>, &amp;custom_add_Tensor);</span><br><span class="line">  m.<span class="built_in">impl</span>(<span class="string">&quot;_copy_from_and_resize&quot;</span>, &amp;custom__copy_from_and_resize);</span><br><span class="line">  m.<span class="built_in">impl</span>(<span class="string">&quot;set_.source_Storage&quot;</span>, &amp;custom_set_source_Storage);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 对于未注册的算子，使用 fallback 回退到 CPU 实现</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">custom_cpu_fallback</span><span class="params">(<span class="type">const</span> c10::OperatorHandle&amp; op, torch::jit::Stack* stack)</span> </span>&#123;</span><br><span class="line">  at::native::<span class="built_in">cpu_fallback</span>(op, stack);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="built_in">TORCH_LIBRARY_IMPL</span>(aten, PrivateUse1, m) &#123;</span><br><span class="line">  m.<span class="built_in">impl</span>(<span class="string">&quot;_foreach_add.List&quot;</span>, torch::CppFunction::<span class="built_in">makeFromBoxedFunction</span>&lt;&amp;custom_cpu_fallback&gt;());</span><br><span class="line">  m.<span class="built_in">impl</span>(<span class="string">&quot;_fused_adamw_&quot;</span>, torch::CppFunction::<span class="built_in">makeFromBoxedFunction</span>&lt;&amp;custom_cpu_fallback&gt;());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：</p>
+<ul>
+<li><code>m.impl(&quot;add.Tensor&quot;, ...)</code> 注册特定算子</li>
+<li><code>m.fallback(...)</code> 为所有未注册的算子设置默认回退</li>
+</ul>
+<h4 id="步骤-2：注册-Device-Guard"><a href="#步骤-2：注册-Device-Guard" class="headerlink" title="步骤 2：注册 Device Guard"></a>步骤 2：注册 Device Guard</h4><p><a href="test/inductor/extension_backends/cpp/extension_device.cpp#L18-L23">test&#x2F;inductor&#x2F;extension_backends&#x2F;cpp&#x2F;extension_device.cpp:18-23</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">namespace</span> at &#123;</span><br><span class="line"><span class="keyword">namespace</span> detail &#123;</span><br><span class="line"></span><br><span class="line"><span class="built_in">C10_REGISTER_GUARD_IMPL</span>(PrivateUse1, c10::impl::NoOpDeviceGuardImpl&lt;DeviceType::PrivateUse1&gt;);</span><br><span class="line"></span><br><span class="line">&#125;&#125; <span class="comment">// namespace at::detail</span></span><br></pre></td></tr></table></figure>
+
+<p>Device Guard 用于管理设备上下文切换。如果你的设备不需要特殊的上下文管理，可以使用 <code>NoOpDeviceGuardImpl</code>。</p>
+<h4 id="步骤-3：注册-Allocator"><a href="#步骤-3：注册-Allocator" class="headerlink" title="步骤 3：注册 Allocator"></a>步骤 3：注册 Allocator</h4><p><a href="test/inductor/extension_backends/cpp/extension_device.cpp#L89-L91">test&#x2F;inductor&#x2F;extension_backends&#x2F;cpp&#x2F;extension_device.cpp:89-91</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 注册自定义内存分配器</span></span><br><span class="line"><span class="type">static</span> DummyCustomAllocator global_custom_alloc;</span><br><span class="line"><span class="built_in">REGISTER_ALLOCATOR</span>(c10::DeviceType::PrivateUse1, &amp;global_custom_alloc);</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-3-Python-端注册"><a href="#4-3-Python-端注册" class="headerlink" title="4.3 Python 端注册"></a>4.3 Python 端注册</h3><p><a href="test/test_privateuseone_python_backend.py#L1-L146">test&#x2F;test_privateuseone_python_backend.py:1-146</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.utils.backend_registration <span class="keyword">import</span> _setup_privateuseone_for_python_backend</span><br><span class="line"></span><br><span class="line"><span class="comment"># 设置 PrivateUse1 后端，自定义名称</span></span><br><span class="line">_setup_privateuseone_for_python_backend(<span class="string">&quot;npy&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 注册算子</span></span><br><span class="line"><span class="meta">@torch.library.impl(<span class="params"><span class="string">&quot;aten::add.Tensor&quot;</span>, <span class="string">&quot;privateuseone&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">add</span>(<span class="params">t1, t2</span>):</span><br><span class="line">    out = unwrap(t1) + unwrap(t2)</span><br><span class="line">    <span class="keyword">return</span> wrap(out, out.shape, torch.float32)</span><br><span class="line"></span><br><span class="line"><span class="meta">@torch.library.impl(<span class="params"><span class="string">&quot;aten::mul.Tensor&quot;</span>, <span class="string">&quot;privateuseone&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">mul</span>(<span class="params">t1, t2</span>):</span><br><span class="line">    out = unwrap(t1) * unwrap(t2)</span><br><span class="line">    <span class="keyword">return</span> wrap(out, out.shape, torch.float32)</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-4-支持-torch-compile（图编译模式）"><a href="#4-4-支持-torch-compile（图编译模式）" class="headerlink" title="4.4 支持 torch.compile（图编译模式）"></a>4.4 支持 torch.compile（图编译模式）</h3><p>如果想让自定义后端支持 <code>torch.compile</code>，需要注册自定义的调度器和代码生成器：</p>
+<p><a href="test/inductor/test_extension_backend.py#L120-L129">test&#x2F;inductor&#x2F;test_extension_backend.py:120-129</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> torch._inductor.codegen.common <span class="keyword">import</span> (</span><br><span class="line">    get_scheduling_for_device,</span><br><span class="line">    get_wrapper_codegen_for_device,</span><br><span class="line">    register_backend_for_device,</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 重命名后端名称</span></span><br><span class="line">torch.utils.rename_privateuse1_backend(<span class="string">&quot;extension_device&quot;</span>)</span><br><span class="line">torch._register_device_module(<span class="string">&quot;extension_device&quot;</span>, self.module)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 注册自定义的调度器和代码生成器</span></span><br><span class="line">register_backend_for_device(</span><br><span class="line">    <span class="string">&quot;extension_device&quot;</span>,</span><br><span class="line">    ExtensionScheduling,      <span class="comment"># 自定义调度策略</span></span><br><span class="line">    ExtensionWrapperCodegen,   <span class="comment"># 自定义 wrapper 代码生成</span></span><br><span class="line">    ExtensionCppWrapperCodegen <span class="comment"># 自定义 C++ wrapper 代码生成</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p><strong>自定义调度器示例</strong>：</p>
+<p><a href="test/inductor/extension_backends/cpp/extension_codegen_backend.py#L1-L41">test&#x2F;inductor&#x2F;extension_backends&#x2F;cpp&#x2F;extension_codegen_backend.py:1-41</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> torch._inductor.codegen <span class="keyword">import</span> cpp, cpp_wrapper_cpu, wrapper</span><br><span class="line"><span class="keyword">from</span> torch._inductor.scheduler <span class="keyword">import</span> BaseScheduling</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ExtensionScheduling</span>(<span class="title class_ inherited__">BaseScheduling</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, scheduler</span>):</span><br><span class="line">        <span class="built_in">super</span>().__init__(scheduler)</span><br><span class="line">        self._scheduling = cpp.CppScheduling(scheduler)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">can_fuse_vertical</span>(<span class="params">self, node1, node2</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">can_fuse_horizontal</span>(<span class="params">self, node1, node2</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">group_fn</span>(<span class="params">self, sizes</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">tuple</span>(<span class="built_in">tuple</span>(<span class="built_in">map</span>(V.graph.sizevars.simplify, s)) <span class="keyword">for</span> s <span class="keyword">in</span> sizes)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">codegen_node</span>(<span class="params">self, node</span>):</span><br><span class="line">        self._scheduling.codegen_node(node)</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-5-关键-API-总结"><a href="#4-5-关键-API-总结" class="headerlink" title="4.5 关键 API 总结"></a>4.5 关键 API 总结</h3><table>
+<thead>
+<tr>
+<th>API</th>
+<th>位置</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>TORCH_LIBRARY_IMPL(aten, PrivateUse1, m)</code></td>
+<td><code>torch/library.h:1064</code></td>
+<td>注册 C++ 算子</td>
+</tr>
+<tr>
+<td><code>m.impl(&quot;add.Tensor&quot;, ...)</code></td>
+<td><code>torch/library.h:692-705</code></td>
+<td>注册特定算子实现</td>
+</tr>
+<tr>
+<td><code>m.fallback(...)</code></td>
+<td><code>torch/library.h:840-844</code></td>
+<td>设置未注册算子的回退处理</td>
+</tr>
+<tr>
+<td><code>C10_REGISTER_GUARD_IMPL</code></td>
+<td><code>c10/core/DeviceGuard.h</code></td>
+<td>注册设备上下文管理</td>
+</tr>
+<tr>
+<td><code>REGISTER_ALLOCATOR</code></td>
+<td><code>c10/core/BackendDeviceCache.h</code></td>
+<td>注册内存分配器</td>
+</tr>
+<tr>
+<td><code>register_backend_for_device</code></td>
+<td><code>torch/_inductor/codegen/common.py</code></td>
+<td>注册 Inductor 调度器和代码生成器</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="五、Codegen：胶水代码的自动化生成"><a href="#五、Codegen：胶水代码的自动化生成" class="headerlink" title="五、Codegen：胶水代码的自动化生成"></a>五、Codegen：胶水代码的自动化生成</h2><h3 id="5-1-为什么需要-Codegen？"><a href="#5-1-为什么需要-Codegen？" class="headerlink" title="5.1 为什么需要 Codegen？"></a>5.1 为什么需要 Codegen？</h3><p>手动为每个后端编写注册代码是极其繁琐的。PyTorch 面临的情况是：</p>
+<ul>
+<li>数百个算子</li>
+<li>数十个后端</li>
+<li>每个算子需要为每个后端提供一个实现</li>
+</ul>
+<p>Codegen（代码生成）解决了这个问题：只需编写一次算子定义，自动化生成所有后端的注册代码。</p>
+<h3 id="5-2-native-functions-yaml：算子定义"><a href="#5-2-native-functions-yaml：算子定义" class="headerlink" title="5.2 native_functions.yaml：算子定义"></a>5.2 native_functions.yaml：算子定义</h3><p><a href="aten/src/ATen/native/native_functions.yaml#L96-L145">aten&#x2F;src&#x2F;ATen&#x2F;native&#x2F;native_functions.yaml:96-145</a></p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="bullet">-</span> <span class="attr">func:</span> <span class="string">_fw_primal(Tensor(a)</span> <span class="string">self,</span> <span class="string">int</span> <span class="string">level)</span> <span class="string">-&gt;</span> <span class="string">Tensor(a)</span></span><br><span class="line">  <span class="attr">variants:</span> <span class="string">method</span></span><br><span class="line">  <span class="attr">dispatch:</span></span><br><span class="line">    <span class="attr">CompositeExplicitAutograd:</span> <span class="string">_fw_primal</span></span><br><span class="line"></span><br><span class="line"><span class="bullet">-</span> <span class="attr">func:</span> <span class="string">_make_dual(Tensor(a)</span> <span class="string">primal,</span> <span class="string">Tensor</span> <span class="string">tangent,</span> <span class="string">int</span> <span class="string">level)</span> <span class="string">-&gt;</span> <span class="string">Tensor(a)</span></span><br><span class="line">  <span class="attr">variants:</span> <span class="string">function</span></span><br><span class="line">  <span class="attr">dispatch:</span></span><br><span class="line">    <span class="attr">CompositeExplicitAutograd:</span> <span class="string">_make_dual</span></span><br></pre></td></tr></table></figure>
+
+<p><code>dispatch:</code> 字段指定哪个后端使用哪个实现。</p>
+<h3 id="5-3-torchgen：Python-端的-Codegen-模型"><a href="#5-3-torchgen：Python-端的-Codegen-模型" class="headerlink" title="5.3 torchgen：Python 端的 Codegen 模型"></a>5.3 torchgen：Python 端的 Codegen 模型</h3><p><a href="torchgen/model.py#L100-L170">torchgen&#x2F;model.py:100-170</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># <span class="doctag">NOTE:</span> Keep the list in sync with `DispatchKey` in c10/core/DispatchKey.h</span></span><br><span class="line">BACKEND_COMPONENTS = [</span><br><span class="line">    <span class="string">&quot;CPU&quot;</span>, <span class="string">&quot;CUDA&quot;</span>, <span class="string">&quot;HIP&quot;</span>, <span class="string">&quot;XLA&quot;</span>, <span class="string">&quot;MTIA&quot;</span>, <span class="string">&quot;MPS&quot;</span>, <span class="string">&quot;IPU&quot;</span>, <span class="string">&quot;XPU&quot;</span>, <span class="string">&quot;HPU&quot;</span>,</span><br><span class="line">    <span class="string">&quot;VE&quot;</span>, <span class="string">&quot;Lazy&quot;</span>, <span class="string">&quot;Meta&quot;</span>, <span class="string">&quot;PrivateUse1&quot;</span>, <span class="string">&quot;PrivateUse2&quot;</span>, <span class="string">&quot;PrivateUse3&quot;</span>,</span><br><span class="line">]</span><br></pre></td></tr></table></figure>
+
+<p>PyTorch 使用 Python 版本的 DispatchKey 枚举来生成 C++ 代码，保持两者同步。</p>
+<h3 id="5-4-Codegen-工作流程"><a href="#5-4-Codegen-工作流程" class="headerlink" title="5.4 Codegen 工作流程"></a>5.4 Codegen 工作流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">native_functions.yaml</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">   torchgen 读取</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">   生成 C++ 注册代码</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">   aten/src/ATen/RegisterXXX.cpp</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：PyTorch 使用 <code>torchgen</code> 将 <code>native_functions.yaml</code> 中的算子定义转换为 C++ 注册代码。每个后端对应一个 <code>RegisterXXX.cpp</code> 文件（如 <code>RegisterCPU.cpp</code>、<code>RegisterCUDA.cpp</code>）。</p>
+<hr>
+<h2 id="六、后端扩展的挑战：永不停歇的”跑步机”"><a href="#六、后端扩展的挑战：永不停歇的”跑步机”" class="headerlink" title="六、后端扩展的挑战：永不停歇的”跑步机”"></a>六、后端扩展的挑战：永不停歇的”跑步机”</h2><p>为 PyTorch 添加和维护一个外部后端是一项巨大的挑战，就像踏上了一台永不停歇的”跑步机”。</p>
+<h3 id="签名变更的破坏性"><a href="#签名变更的破坏性" class="headerlink" title="签名变更的破坏性"></a>签名变更的破坏性</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 旧版本</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">some_op</span>(<span class="params"><span class="built_in">input</span>, other_arg</span>):</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line"><span class="comment"># 新版本，增加了带默认值的参数</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">some_op</span>(<span class="params"><span class="built_in">input</span>, other_arg, new_arg=<span class="literal">None</span></span>):</span><br><span class="line">    ...</span><br></pre></td></tr></table></figure>
+
+<p>对于 Python 用户来说，这是一个完全兼容的改动。但对于用 C++ 为后端实现 <code>some_op</code> 的开发者来说，这却是一个破坏性变更，因为他们的函数签名不再匹配，导致编译失败。</p>
+<h3 id="CI-集成的重要性"><a href="#CI-集成的重要性" class="headerlink" title="CI 集成的重要性"></a>CI 集成的重要性</h3><p>XLA 团队能够成功，很大程度上是因为他们的代码被整合进了 PyTorch 的持续集成（CI）系统中。</p>
+<h3 id="BackendImplInterface：后端接口抽象"><a href="#BackendImplInterface：后端接口抽象" class="headerlink" title="BackendImplInterface：后端接口抽象"></a>BackendImplInterface：后端接口抽象</h3><p><a href="torch/csrc/lazy/backend/backend_interface.h">torch&#x2F;csrc&#x2F;lazy&#x2F;backend&#x2F;backend_interface.h</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">TORCH_API</span> BackendImplInterface &#123;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::shared_ptr&lt;BackendDeviceType&gt; <span class="title">GetDefaultDeviceType</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> at::DeviceType <span class="title">EagerFallbackDeviceType</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> BackendDevice <span class="title">GetBackendDevice</span><span class="params">(c10::Device device)</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::vector&lt;ComputationPtr&gt; <span class="title">Compile</span><span class="params">(...)</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::vector&lt;BackendDataPtr&gt; <span class="title">ExecuteComputation</span><span class="params">(...)</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="七、核心文件参考"><a href="#七、核心文件参考" class="headerlink" title="七、核心文件参考"></a>七、核心文件参考</h2><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>c10/core/DispatchKey.h</code></td>
+<td>DispatchKey 枚举定义和优先级顺序</td>
+</tr>
+<tr>
+<td><code>c10/core/DispatchKeySet.h</code></td>
+<td>DispatchKeySet 和分发表索引计算</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/core/dispatch/Dispatcher.h</code></td>
+<td>Dispatcher 核心实现</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/core/dispatch/OperatorEntry.cpp</code></td>
+<td>分发表查找算法</td>
+</tr>
+<tr>
+<td><code>torch/library.h</code></td>
+<td>TORCH_LIBRARY_IMPL 宏定义</td>
+</tr>
+<tr>
+<td><code>torchgen/model.py</code></td>
+<td>Python 端 DispatchKey 模型</td>
+</tr>
+<tr>
+<td><code>aten/src/ATen/native/native_functions.yaml</code></td>
+<td>算子定义和分发配置</td>
+</tr>
+<tr>
+<td><code>torch/csrc/lazy/backend/backend_interface.h</code></td>
+<td>后端接口抽象</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="八、总结"><a href="#八、总结" class="headerlink" title="八、总结"></a>八、总结</h2><p>PyTorch 的后端可扩展性是一个不断演进的故事：</p>
+<table>
+<thead>
+<tr>
+<th>后端类型</th>
+<th>代表</th>
+<th>集成难度</th>
+<th>关键挑战</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>与 CUDA 相似</strong></td>
+<td>AMD ROCm&#x2F;HIP</td>
+<td>低</td>
+<td>保持 API 兼容性</td>
+</tr>
+<tr>
+<td><strong>与 CUDA 完全不同</strong></td>
+<td>Google XLA</td>
+<td>高</td>
+<td>需要惰性求值和图优化</td>
+</tr>
+<tr>
+<td><strong>自定义后端</strong></td>
+<td>PrivateUse1&#x2F;2&#x2F;3</td>
+<td>中</td>
+<td>依赖社区支持</td>
+</tr>
+</tbody></table>
+<p><strong>核心要点</strong>：</p>
+<ol>
+<li><strong>Dispatcher 是路由核心</strong>：通过 DispatchKey 确定使用哪个后端的实现</li>
+<li><strong>优先级由位置决定</strong>：enum 中越靠后的 DispatchKey，优先级越高</li>
+<li><strong>Codegen 自动化</strong>：native_functions.yaml 定义算子，torchgen 自动生成所有后端的注册代码</li>
+<li><strong>PrivateUse1 完整方案</strong>：从 C++ 算子注册到 Python 绑定，再到 Inductor 集成</li>
+<li><strong>BackendImplInterface 抽象</strong>：简化新后端的集成过程</li>
+</ol>
+<p>从最初与 CUDA 紧密耦合的架构，到通过 Dispatcher 和动态注册机制支持像 XLA 这样截然不同的后端，PyTorch 正变得越来越开放和灵活。PyTorch 2.12 已支持 MTIA、MAIA 等新后端，并通过 PrivateUse1&#x2F;2&#x2F;3 为自定义硬件提供便捷的集成路径，为一个更加多元化的硬件生态系统做好了准备。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_9.pytorch-backend-extensibility/">http://example.com/2026/05/24/publish_9.pytorch-backend-extensibility/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_cas/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            cas
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_placement-new/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            placement new
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

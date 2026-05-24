@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch variable evolution | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 的“消失”术：Variable 的前世今生如果你是一位经验丰富的 PyTorch 用户，你可能会隐约记得一个叫做 Variable 的类。但如果你是近几年才开始接触 PyTorch，你可能从未在代码中见过它。Variable 曾是 PyTorch 自动求导机制的核心，但如今它已悄然从 Python 前端消失。那么，Variable 究竟是什么？它为何出现，又为何消失？它的“幽灵”又">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch variable evolution">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_10.pytorch-variable-evolution/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 的“消失”术：Variable 的前世今生如果你是一位经验丰富的 PyTorch 用户，你可能会隐约记得一个叫做 Variable 的类。但如果你是近几年才开始接触 PyTorch，你可能从未在代码中见过它。Variable 曾是 PyTorch 自动求导机制的核心，但如今它已悄然从 Python 前端消失。那么，Variable 究竟是什么？它为何出现，又为何消失？它的“幽灵”又">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.176Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch variable evolution
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E6%B7%B7%E6%B2%8C%E5%88%9D%E5%BC%80%EF%BC%9A%E4%BB%8E-Lua-Torch-%E5%88%B0-ATen"><span class="toc-text">一、混沌初开：从 Lua Torch 到 ATen</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Variable-%E7%9A%84%E8%AF%9E%E7%94%9F%EF%BC%9A%E4%B8%BA%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E8%80%8C%E7%94%9F%E7%9A%84%E2%80%9C%E5%8C%85%E8%A3%85%E7%9B%92%E2%80%9D"><span class="toc-text">二、Variable 的诞生：为自动求导而生的“包装盒”</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%94%A8%E6%88%B7%E7%9A%84%E5%9B%B0%E6%83%91%EF%BC%9ATensor-%E4%B8%8E-Variable-%E7%9A%84%E2%80%9C%E5%88%86%E8%A3%82%E2%80%9D"><span class="toc-text">三、用户的困惑：Tensor 与 Variable 的“分裂”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E4%BE%8B%E5%AD%90%EF%BC%9APyTorch-0-4-%E5%89%8D%E5%90%8E%E7%9A%84%E4%BB%A3%E7%A0%81%E5%AF%B9%E6%AF%94"><span class="toc-text">一个例子：PyTorch 0.4 前后的代码对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E5%8E%86%E5%8F%B2%E6%80%A7%E7%9A%84%E5%90%88%E5%B9%B6%EF%BC%9ATensor-%E5%90%9E%E5%B9%B6-Variable"><span class="toc-text">四、历史性的合并：Tensor 吞并 Variable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E5%89%8D%E7%AB%AF%E2%80%9C%E9%9A%9C%E7%9C%BC%E6%B3%95%E2%80%9D"><span class="toc-text">第一步：前端“障眼法”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%E5%90%8E%E7%AB%AF%E2%80%9C%E6%89%8B%E6%9C%AF%E5%88%80%E2%80%9D%E2%80%94%E2%80%94%E5%88%86%E5%8F%91%E5%99%A8%E4%B8%8E%E7%BA%BF%E7%A8%8B%E6%9C%AC%E5%9C%B0%E7%8A%B6%E6%80%81"><span class="toc-text">第二步：后端“手术刀”——分发器与线程本地状态</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%A6%82%E4%BB%8A%E4%B8%8E%E6%9C%AA%E6%9D%A5%EF%BC%9AVariable-%E7%9A%84%E5%B9%BD%E7%81%B5"><span class="toc-text">五、如今与未来：Variable 的幽灵</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Variable-%E5%9C%A8-C-%E4%B8%AD%E7%9A%84%E7%8E%B0%E7%8A%B6"><span class="toc-text">Variable 在 C++ 中的现状</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AutogradMeta%EF%BC%9A%E5%AD%98%E5%82%A8%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E5%85%83%E6%95%B0%E6%8D%AE%E7%9A%84%E2%80%9C%E6%8F%92%E6%A7%BD%E2%80%9D"><span class="toc-text">AutogradMeta：存储自动求导元数据的“插槽”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E5%88%86%E9%85%8D%EF%BC%9A%E6%8C%89%E9%9C%80%E5%A1%AB%E5%85%85%E7%9A%84%E6%8F%92%E6%A7%BD"><span class="toc-text">惰性分配：按需填充的插槽</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%8E%86%E5%8F%B2%E5%9C%A8%E8%BD%AE%E5%9B%9E%EF%BC%9F"><span class="toc-text">六、历史在轮回？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%99%84%E5%BD%95%EF%BC%9A%E5%85%B3%E9%94%AE%E6%BA%90%E6%96%87%E4%BB%B6%E7%B4%A2%E5%BC%95"><span class="toc-text">附录：关键源文件索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E6%B7%B7%E6%B2%8C%E5%88%9D%E5%BC%80%EF%BC%9A%E4%BB%8E-Lua-Torch-%E5%88%B0-ATen"><span class="toc-text">一、混沌初开：从 Lua Torch 到 ATen</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Variable-%E7%9A%84%E8%AF%9E%E7%94%9F%EF%BC%9A%E4%B8%BA%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E8%80%8C%E7%94%9F%E7%9A%84%E2%80%9C%E5%8C%85%E8%A3%85%E7%9B%92%E2%80%9D"><span class="toc-text">二、Variable 的诞生：为自动求导而生的“包装盒”</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%94%A8%E6%88%B7%E7%9A%84%E5%9B%B0%E6%83%91%EF%BC%9ATensor-%E4%B8%8E-Variable-%E7%9A%84%E2%80%9C%E5%88%86%E8%A3%82%E2%80%9D"><span class="toc-text">三、用户的困惑：Tensor 与 Variable 的“分裂”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E4%BE%8B%E5%AD%90%EF%BC%9APyTorch-0-4-%E5%89%8D%E5%90%8E%E7%9A%84%E4%BB%A3%E7%A0%81%E5%AF%B9%E6%AF%94"><span class="toc-text">一个例子：PyTorch 0.4 前后的代码对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E5%8E%86%E5%8F%B2%E6%80%A7%E7%9A%84%E5%90%88%E5%B9%B6%EF%BC%9ATensor-%E5%90%9E%E5%B9%B6-Variable"><span class="toc-text">四、历史性的合并：Tensor 吞并 Variable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E5%89%8D%E7%AB%AF%E2%80%9C%E9%9A%9C%E7%9C%BC%E6%B3%95%E2%80%9D"><span class="toc-text">第一步：前端“障眼法”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%E5%90%8E%E7%AB%AF%E2%80%9C%E6%89%8B%E6%9C%AF%E5%88%80%E2%80%9D%E2%80%94%E2%80%94%E5%88%86%E5%8F%91%E5%99%A8%E4%B8%8E%E7%BA%BF%E7%A8%8B%E6%9C%AC%E5%9C%B0%E7%8A%B6%E6%80%81"><span class="toc-text">第二步：后端“手术刀”——分发器与线程本地状态</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%A6%82%E4%BB%8A%E4%B8%8E%E6%9C%AA%E6%9D%A5%EF%BC%9AVariable-%E7%9A%84%E5%B9%BD%E7%81%B5"><span class="toc-text">五、如今与未来：Variable 的幽灵</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Variable-%E5%9C%A8-C-%E4%B8%AD%E7%9A%84%E7%8E%B0%E7%8A%B6"><span class="toc-text">Variable 在 C++ 中的现状</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AutogradMeta%EF%BC%9A%E5%AD%98%E5%82%A8%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E5%85%83%E6%95%B0%E6%8D%AE%E7%9A%84%E2%80%9C%E6%8F%92%E6%A7%BD%E2%80%9D"><span class="toc-text">AutogradMeta：存储自动求导元数据的“插槽”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%83%B0%E6%80%A7%E5%88%86%E9%85%8D%EF%BC%9A%E6%8C%89%E9%9C%80%E5%A1%AB%E5%85%85%E7%9A%84%E6%8F%92%E6%A7%BD"><span class="toc-text">惰性分配：按需填充的插槽</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%8E%86%E5%8F%B2%E5%9C%A8%E8%BD%AE%E5%9B%9E%EF%BC%9F"><span class="toc-text">六、历史在轮回？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%99%84%E5%BD%95%EF%BC%9A%E5%85%B3%E9%94%AE%E6%BA%90%E6%96%87%E4%BB%B6%E7%B4%A2%E5%BC%95"><span class="toc-text">附录：关键源文件索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-的“消失”术：Variable-的前世今生"><a href="#PyTorch-的“消失”术：Variable-的前世今生" class="headerlink" title="PyTorch 的“消失”术：Variable 的前世今生"></a>PyTorch 的“消失”术：Variable 的前世今生</h1><p>如果你是一位经验丰富的 PyTorch 用户，你可能会隐约记得一个叫做 Variable 的类。但如果你是近几年才开始接触 PyTorch，你可能从未在代码中见过它。Variable 曾是 PyTorch 自动求导机制的核心，但如今它已悄然从 Python 前端消失。那么，Variable 究竟是什么？它为何出现，又为何消失？它的“幽灵”又以何种形式影响着今天的 PyTorch？</p>
+<p>本文深入探讨了这段有趣的技术演进史，理解它不仅能满足我们的好奇心，更能帮助我们洞察 PyTorch 框架设计的底层逻辑。</p>
+<hr>
+<h2 id="一、混沌初开：从-Lua-Torch-到-ATen"><a href="#一、混沌初开：从-Lua-Torch-到-ATen" class="headerlink" title="一、混沌初开：从 Lua Torch 到 ATen"></a>一、混沌初开：从 Lua Torch 到 ATen</h2><p>故事要从 PyTorch 的前身——Lua Torch 时代说起。那时，张量（Tensor）在底层是由 C 语言的结构体（struct）实现的。为了支持不同的数据类型（如 float, double, int），Lua Torch 的底层库 TH 为每一种数据类型都定义了一个独立的 C 结构体，例如 THFloatTensor, THDoubleTensor 等。这种设计使得编写能够通用处理不同数据类型的代码变得异常困难，开发者不得不依赖大量的宏和预处理器来为每种类型生成重复的代码。</p>
+<p>随后，PyTorch 诞生了。在早期，它依然沿用了 TH 库的张量实现。直到 Zach（译注：Zachary DeVito）开发了新的 C++ 库 ATen (A Tensor library)，情况才有了改变。ATen 的核心思想之一，就是创建一个统一的、不依赖于具体数据类型（dtype）的 Tensor 类。开发者不再需要为每种 dtype 编写模板代码，这极大地简化了 C++ 层的算子开发，并改善了因 C++ 模板实例化而产生的臭名昭著的编译错误信息。</p>
+<p>然而，无论是旧的 TH 库还是新的 ATen 库，它们都只关心张量的数学运算，对<strong>自动微分（Autograd）</strong>一无所知。</p>
+<hr>
+<h2 id="二、Variable-的诞生：为自动求导而生的“包装盒”"><a href="#二、Variable-的诞生：为自动求导而生的“包装盒”" class="headerlink" title="二、Variable 的诞生：为自动求导而生的“包装盒”"></a>二、Variable 的诞生：为自动求导而生的“包装盒”</h2><p>在早期 PyTorch 中，自动求导功能完全是在 Python 层实现的。当 Sam（译注：Sam Gross）着手将自动求导功能用 C++ 重写以提升性能时，他面临一个架构上的选择。当时最直接、最简单的方案是维持 ATen 库的独立性，即让张量系统继续对自动求导“一无所知”。</p>
+<p>想象一下，你有一个只懂得做数学计算的 Tensor 对象库。现在，你希望为它增加追踪计算历史、构建计算图以便反向传播的功能。如果你不能直接修改 Tensor 的内部结构，你会怎么做？</p>
+<p>答案是：给它套上一个“包装盒”。</p>
+<p>这个包装盒就是 Variable。Variable 本质上是一个包裹着 Tensor 的容器，它额外存储了自动求导所需的元数据，比如指向创建它的操作的 <code>grad_fn</code>（梯度函数）和用于累积梯度的 <code>.grad</code> 属性。Tensor 负责存储和计算数据，而 Variable 则负责构建和维护计算图。这种分离在当时是一种清晰且易于实现的架构。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 简化版的 Variable 结构（历史版本）</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Variable</span> &#123;</span><br><span class="line">    Tensor data;                  <span class="comment">// 底层的 Tensor 数据</span></span><br><span class="line">    std::shared_ptr&lt;Node&gt; grad_fn_;     <span class="comment">// 记录创建它的操作</span></span><br><span class="line">    std::weak_ptr&lt;Node&gt; grad_accumulator_; <span class="comment">// 叶子节点的梯度累加器</span></span><br><span class="line">    <span class="type">bool</span> requires_grad_;          <span class="comment">// 是否需要求导</span></span><br><span class="line">    <span class="type">bool</span> is_view_;                <span class="comment">// 是否是视图</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、用户的困惑：Tensor-与-Variable-的“分裂”"><a href="#三、用户的困惑：Tensor-与-Variable-的“分裂”" class="headerlink" title="三、用户的困惑：Tensor 与 Variable 的“分裂”"></a>三、用户的困惑：Tensor 与 Variable 的“分裂”</h2><p>这个设计虽然在内部实现上很优雅，却给用户带来了巨大的困惑。社区里充斥着各种各样的问题：</p>
+<ul>
+<li>“我应该什么时候用 Tensor，什么时候用 Variable？”</li>
+<li>“Tensor 和 Variable 到底有什么区别？”</li>
+<li>“什么时候需要用 <code>.data</code> 属性来获取底层的 Tensor？”</li>
+</ul>
+<p>对于用户来说，他们脑海中只有三种状态：</p>
+<ol>
+<li>一个需要计算梯度的张量（Variable with <code>requires_grad=True</code>）</li>
+<li>一个不需要计算梯度的张量（Variable with <code>requires_grad=False</code>）</li>
+<li>一个纯粹的 Tensor 对象</li>
+</ol>
+<p>问题在于，后两种状态在语义上几乎完全相同，它们都不参与梯度计算。但因为 API 的分裂，用户必须时刻关心自己手中的对象到底是 Tensor 还是 Variable，这增加了不必要的心智负担。</p>
+<h3 id="一个例子：PyTorch-0-4-前后的代码对比"><a href="#一个例子：PyTorch-0-4-前后的代码对比" class="headerlink" title="一个例子：PyTorch 0.4 前后的代码对比"></a>一个例子：PyTorch 0.4 前后的代码对比</h3><p>为了更直观地感受这种变化，让我们来看一个简单的例子。</p>
+<p><strong>PyTorch 0.4 之前（旧版）：</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.autograd <span class="keyword">import</span> Variable</span><br><span class="line"></span><br><span class="line"><span class="comment"># 必须显式地将 Tensor 包装成 Variable 才能进行自动求导</span></span><br><span class="line">x_tensor = torch.tensor([<span class="number">2.0</span>])</span><br><span class="line">x_variable = Variable(x_tensor, requires_grad=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 对 Variable 进行操作</span></span><br><span class="line">y = x_variable * x_variable</span><br><span class="line">y.backward()</span><br><span class="line"></span><br><span class="line"><span class="comment"># 梯度存储在 Variable 的 .grad 属性中</span></span><br><span class="line"><span class="built_in">print</span>(x_variable.grad)</span><br><span class="line"><span class="comment"># &gt;&gt; tensor([4.])</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 使用 .data 获取内部的 Tensor</span></span><br><span class="line"><span class="built_in">print</span>(x_variable.data)</span><br><span class="line"><span class="comment"># &gt;&gt; tensor([2.])</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>PyTorch 0.4 及之后（现代）：</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="comment"># Tensor 自己就拥有了自动求导的能力</span></span><br><span class="line">x = torch.tensor([<span class="number">2.0</span>], requires_grad=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 直接对 Tensor 进行操作</span></span><br><span class="line">y = x * x</span><br><span class="line">y.backward()</span><br><span class="line"></span><br><span class="line"><span class="comment"># 梯度直接存储在 Tensor 的 .grad 属性中</span></span><br><span class="line"><span class="built_in">print</span>(x.grad)</span><br><span class="line"><span class="comment"># &gt;&gt; tensor([4.])</span></span><br></pre></td></tr></table></figure>
+
+<p>从这个例子可以清晰地看到，合并后的 API 变得多么简洁和直观。</p>
+<hr>
+<h2 id="四、历史性的合并：Tensor-吞并-Variable"><a href="#四、历史性的合并：Tensor-吞并-Variable" class="headerlink" title="四、历史性的合并：Tensor 吞并 Variable"></a>四、历史性的合并：Tensor 吞并 Variable</h2><p>为了解决用户的困惑，PyTorch 团队在 0.4 版本中做出了一个里程碑式的决定：合并 Tensor 和 Variable。</p>
+<p>这个合并过程分两步走，充满了智慧（甚至有点“欺骗性”）：</p>
+<h3 id="第一步：前端“障眼法”"><a href="#第一步：前端“障眼法”" class="headerlink" title="第一步：前端“障眼法”"></a>第一步：前端“障眼法”</h3><p>在 Python API 层面，团队并没有立刻重构所有 C++ 底层代码。他们走了一条捷径：让 Python 中的 <code>torch.Tensor</code> 类直接变成之前的 Variable 类。也就是说，用户在 Python 中创建的每一个 Tensor，其背后实际上都是那个可以追踪梯度的 Variable 对象。这样一来，Variable 类就从用户的视野中消失了，实现了 API 的统一，但底层的分离依然存在。</p>
+<h3 id="第二步：后端“手术刀”——分发器与线程本地状态"><a href="#第二步：后端“手术刀”——分发器与线程本地状态" class="headerlink" title="第二步：后端“手术刀”——分发器与线程本地状态"></a>第二步：后端“手术刀”——分发器与线程本地状态</h3><p>前端的统一带来了新的后端挑战。以前，当一个 Variable 上的操作被调用时（如 <code>add</code>），它会先设置好计算图，然后“解包”（unwrap）出内部的 Tensor，再调用 ATen 库中真正的 <code>add</code> 实现。现在 Tensor 和 Variable 合并了，如何区分一个 <code>add</code> 调用是需要构建计算图的“外层调用”，还是一个在算子实现内部、不需要重复追踪梯度的“内层调用”呢？直接调用自己会造成无限递归。</p>
+<p>这个难题最终由 Will Feng 通过引入<strong>分发器（Dispatcher）和线程本地状态（Thread Local State）</strong>解决。让我们来看看当前 PyTorch 2.12 中的实现：</p>
+<p><strong>1. 线程本地的调度状态</strong></p>
+<p><a href="c10/core/impl/LocalDispatchKeySet.h#L14-L17">LocalDispatchKeySet.h:14-17</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//   - The excluded type set, which disqualifies a tensor type from dispatch.</span></span><br><span class="line"><span class="comment">//     (For example, after redispatching on variable, we disqualify</span></span><br><span class="line"><span class="comment">//     Autograd so we don&#x27;t attempt to handle variable again.)</span></span><br><span class="line"><span class="comment">//     (Exclusion wins over inclusion.)</span></span><br></pre></td></tr></table></figure>
+
+<p>关键在于 <code>ExcludeDispatchKeySet</code>——当 autograd 处理完一个操作后，会将 <code>Autograd</code> 和 <code>ADInplaceOrView</code> 加入到这个”排除集合”中。</p>
+<p><strong>2. 如何避免无限递归</strong></p>
+<p>当一个需要求导的 Tensor 调用一个操作时，分发器会先将其导向自动求导的逻辑。在执行完这部分逻辑（例如记录操作到计算图中）后，系统会通过 <code>ExcludeDispatchKeyGuard</code> 设置一个线程本地的排除标志：</p>
+<p><a href="c10/core/impl/LocalDispatchKeySet.h#L100-L116">LocalDispatchKeySet.h:100-116</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ExcludeDispatchKeyGuard</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">ExcludeDispatchKeyGuard</span>(DispatchKeySet* keyset, DispatchKey key)</span><br><span class="line">      : <span class="built_in">previous_</span>(keyset-&gt;excluded_) &#123;</span><br><span class="line">    keyset-&gt;excluded_ = previous_ | <span class="built_in">DispatchKeySet</span>(key);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">ExcludeDispatchKeyGuard</span>() &#123;</span><br><span class="line">    keyset-&gt;excluded_ = previous_;</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>然后，它再次调用同一个操作。但这次因为 <code>Autograd</code> 键已被排除，分发器会将其直接导向底层的 ATen 内核实现，从而避免了无限递归。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 伪代码演示这个过程</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">add_backward</span>(<span class="params">tensor1, tensor2</span>):</span><br><span class="line">    <span class="comment"># 1. Autograd dispatcher 被调用</span></span><br><span class="line">    <span class="comment"># 2. 记录操作到计算图中</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># 3. 设置排除标志：跳过 Autograd</span></span><br><span class="line">    <span class="keyword">with</span> exclude_autograd():</span><br><span class="line">        <span class="comment"># 4. 重新调用 add，但这次直接到 ATen</span></span><br><span class="line">        <span class="keyword">return</span> at_add(tensor1, tensor2)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、如今与未来：Variable-的幽灵"><a href="#五、如今与未来：Variable-的幽灵" class="headerlink" title="五、如今与未来：Variable 的幽灵"></a>五、如今与未来：Variable 的幽灵</h2><h3 id="Variable-在-C-中的现状"><a href="#Variable-在-C-中的现状" class="headerlink" title="Variable 在 C++ 中的现状"></a>Variable 在 C++ 中的现状</h3><p>经过后续的代码重构，Variable 类最终从 C++ 代码库中被彻底清除。今天的 PyTorch 中：</p>
+<p><a href="torch/csrc/autograd/variable.h#L25-L32">variable.h:25-32</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// `Variable` is exactly the same as `Tensor` (i.e. we have `using Variable =</span></span><br><span class="line"><span class="comment">/// at::Tensor`). This means you can perform all the usual mathematical and</span></span><br><span class="line"><span class="comment">/// other operations you can perform on `Tensor`s also on `Variable`s.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// The only reason we are keeping the `Variable` class is backward</span></span><br><span class="line"><span class="comment">/// compatibility with external user&#x27;s legacy C++ frontend code.</span></span><br><span class="line"><span class="keyword">using</span> Variable = at::Tensor;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，在 C++ 层，<code>Variable</code> 现在只是 <code>at::Tensor</code> 的别名，完全没有特殊性可言。</p>
+<h3 id="AutogradMeta：存储自动求导元数据的“插槽”"><a href="#AutogradMeta：存储自动求导元数据的“插槽”" class="headerlink" title="AutogradMeta：存储自动求导元数据的“插槽”"></a>AutogradMeta：存储自动求导元数据的“插槽”</h3><p>虽然 Variable 消失了，但自动求导的元数据仍然需要存储。今天的 PyTorch 使用了一种更优雅的设计：在 TensorImpl 中预留了一个“插槽”。</p>
+<p><a href="c10/core/TensorImpl.h#L2920">c10&#x2F;core&#x2F;TensorImpl.h:2920</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">std::unique_ptr&lt;c10::AutogradMetaInterface&gt; autograd_meta_ = <span class="literal">nullptr</span>;</span><br></pre></td></tr></table></figure>
+
+<p><code>AutogradMeta</code> 结构存储了所有自动求导所需的信息：</p>
+<p><a href="torch/csrc/autograd/variable.h#L227-L358">variable.h:227-358</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">TORCH_API</span> AutogradMeta : <span class="keyword">public</span> c10::AutogradMetaInterface &#123;</span><br><span class="line">  std::string name_;</span><br><span class="line">  Variable grad_;                              <span class="comment">// 梯度张量</span></span><br><span class="line">  std::shared_ptr&lt;Node&gt; grad_fn_;             <span class="comment">// 创建这个张量的操作的梯度函数</span></span><br><span class="line">  std::weak_ptr&lt;Node&gt; grad_accumulator_;      <span class="comment">// 叶子节点的梯度累加器</span></span><br><span class="line">  <span class="keyword">mutable</span> std::shared_ptr&lt;ForwardGrad&gt; fw_grad_; <span class="comment">// 前向模式的梯度</span></span><br><span class="line">  std::vector&lt;std::unique_ptr&lt;FunctionPreHook&gt;&gt; hooks_;</span><br><span class="line">  std::shared_ptr&lt;hooks_list&gt; cpp_hooks_list_;</span><br><span class="line">  std::unique_ptr&lt;PostAccumulateGradHook&gt; post_acc_grad_hooks_;</span><br><span class="line">  <span class="type">bool</span> requires_grad_&#123;<span class="literal">false</span>&#125;;                 <span class="comment">// 是否需要求导</span></span><br><span class="line">  <span class="type">bool</span> retains_grad_&#123;<span class="literal">false</span>&#125;;                  <span class="comment">// 是否保留非叶子节点的梯度</span></span><br><span class="line">  <span class="type">bool</span> is_view_&#123;<span class="literal">false</span>&#125;;                       <span class="comment">// 是否是视图</span></span><br><span class="line">  <span class="type">uint32_t</span> output_nr_;                        <span class="comment">// 输出编号</span></span><br><span class="line">  std::optional&lt;at::ScalarType&gt; grad_dtype_;  <span class="comment">// 梯度数据类型</span></span><br><span class="line">  <span class="type">bool</span> allow_grad_dtype_mismatch_&#123;<span class="literal">false</span>&#125;;</span><br><span class="line">  <span class="keyword">mutable</span> std::mutex mutex_;                 <span class="comment">// 线程安全</span></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>关键设计：<strong>只有当 <code>requires_grad=True</code> 时，这个插槽才会被填充并分配内存</strong>。这意味着在不需要求导的推理场景（Inference Mode）下，autograd_meta 指针为空，完全没有任何额外开销。</p>
+<h3 id="惰性分配：按需填充的插槽"><a href="#惰性分配：按需填充的插槽" class="headerlink" title="惰性分配：按需填充的插槽"></a>惰性分配：按需填充的插槽</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 获取 AutogradMeta（如果不存在会创建）</span></span><br><span class="line"><span class="function">AutogradMeta* <span class="title">get_autograd_meta</span><span class="params">(<span class="type">const</span> at::TensorBase&amp; self)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span>* impl = self.<span class="built_in">unsafeGetTensorImpl</span>();</span><br><span class="line">  <span class="keyword">if</span> (!impl-&gt;<span class="built_in">autograd_meta</span>()) &#123;</span><br><span class="line">    impl-&gt;<span class="built_in">set_autograd_meta</span>(std::<span class="built_in">make_unique</span>&lt;AutogradMeta&gt;());</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> impl-&gt;<span class="built_in">autograd_meta</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这种设计在性能和安全之间取得了完美平衡：</p>
+<ul>
+<li><strong>推理时</strong>：零开销，没有梯度相关的数据结构被创建</li>
+<li><strong>训练时</strong>：按需分配，只为需要梯度的张量创建元数据</li>
+</ul>
+<hr>
+<h2 id="六、历史在轮回？"><a href="#六、历史在轮回？" class="headerlink" title="六、历史在轮回？"></a>六、历史在轮回？</h2><p>有趣的是，历史似乎在轮回。为了实现更高级的自动微分功能，比如像 JAX 框架那样进行函数变换和嵌套求导，社区正在探索新的实现方式。其中一个原型方案，恰恰是再次使用了“包装”的思想——通过多层包装 Tensor 来追踪不同阶的梯度信息。</p>
+<p>Variable 的故事，是 PyTorch 从一个研究工具演变为成熟工业级框架的缩影。它告诉我们，一个优秀的框架不仅需要强大的功能，更需要不断打磨，为用户提供简洁、直观、符合心智模型的编程体验。</p>
+<p>而它在 C++ 层面留下的“插槽”设计——用<code>unique_ptr</code>按需分配 AutogradMeta——更是一个经典的设计模式：<strong>在不破坏现有接口的情况下，通过预留扩展点来实现功能的演进</strong>。</p>
+<hr>
+<h2 id="附录：关键源文件索引"><a href="#附录：关键源文件索引" class="headerlink" title="附录：关键源文件索引"></a>附录：关键源文件索引</h2><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>文件路径</th>
+<th>关键行号</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Variable &#x3D; Tensor 别名</td>
+<td><a href="torch/csrc/autograd/variable.h">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.h</a></td>
+<td>32</td>
+</tr>
+<tr>
+<td>AutogradMeta 结构</td>
+<td><a href="torch/csrc/autograd/variable.h">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.h</a></td>
+<td>227-358</td>
+</tr>
+<tr>
+<td>TensorImpl 中的 autograd_meta 插槽</td>
+<td><a href="c10/core/TensorImpl.h">c10&#x2F;core&#x2F;TensorImpl.h</a></td>
+<td>2920</td>
+</tr>
+<tr>
+<td>ExcludeDispatchKeyGuard</td>
+<td><a href="c10/core/impl/LocalDispatchKeySet.h">c10&#x2F;core&#x2F;impl&#x2F;LocalDispatchKeySet.h</a></td>
+<td>100-116</td>
+</tr>
+<tr>
+<td>DispatchKeySet 排除机制说明</td>
+<td><a href="c10/core/impl/LocalDispatchKeySet.h">c10&#x2F;core&#x2F;impl&#x2F;LocalDispatchKeySet.h</a></td>
+<td>14-17</td>
+</tr>
+<tr>
+<td>grad_fn 访问器实现</td>
+<td><a href="torch/csrc/autograd/variable.cpp">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.cpp</a></td>
+<td>651-732</td>
+</tr>
+<tr>
+<td>ATen 历史</td>
+<td><a href="blog/2.pytorch-dispatcher-history.md">blog&#x2F;2.pytorch-dispatcher-history.md</a></td>
+<td>80-84</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>架构特点</th>
+<th>用户体验</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Lua Torch 时代</strong></td>
+<td>TH 库，每种 dtype 独立结构体</td>
+<td>难以编写通用代码</td>
+</tr>
+<tr>
+<td><strong>早期 PyTorch</strong></td>
+<td>ATen 统一 Tensor + Python 层 Variable</td>
+<td>Tensor 和 Variable 分裂</td>
+</tr>
+<tr>
+<td><strong>PyTorch 0.4</strong></td>
+<td>Python API 统一，底层通过 Dispatcher + TLS 避免递归</td>
+<td>简洁的单一 API</td>
+</tr>
+<tr>
+<td><strong>PyTorch 2.12</strong></td>
+<td>Variable &#x3D; Tensor，AutogradMeta 按需分配</td>
+<td>高效且统一</td>
+</tr>
+</tbody></table>
+<p>Variable 的“消失”并非简单的删除，而是一次精心设计的架构演进：它让复杂的自动求导机制在用户面前消失，却又在底层以更优雅的方式继续存在。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_10.pytorch-variable-evolution/">http://example.com/2026/05/24/publish_10.pytorch-variable-evolution/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_2.pytorch-dispatcher-history/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch dispatcher history
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

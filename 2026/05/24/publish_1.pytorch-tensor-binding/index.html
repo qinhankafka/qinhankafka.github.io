@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch tensor binding | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 内部机制：Tensor 与 Python 对象的绑定原理引言：Python 的温柔与 C++ 的冷酷当你写下这行代码时： 12import torcht &#x3D; torch.tensor([1.0, 2.0, 3.0])  你有没有想过，背后究竟发生了什么？ 你可能会说：”这有什么，创建一个 tensor 就完了啊。” 等等，Python 世界和 C++ 世界？在继续之前，我们需要先理">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch tensor binding">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_1.pytorch-tensor-binding/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 内部机制：Tensor 与 Python 对象的绑定原理引言：Python 的温柔与 C++ 的冷酷当你写下这行代码时： 12import torcht &#x3D; torch.tensor([1.0, 2.0, 3.0])  你有没有想过，背后究竟发生了什么？ 你可能会说：”这有什么，创建一个 tensor 就完了啊。” 等等，Python 世界和 C++ 世界？在继续之前，我们需要先理">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.171Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch tensor binding
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9APython-%E7%9A%84%E6%B8%A9%E6%9F%94%E4%B8%8E-C-%E7%9A%84%E5%86%B7%E9%85%B7"><span class="toc-text">引言：Python 的温柔与 C++ 的冷酷</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E7%AD%89%EF%BC%8CPython-%E4%B8%96%E7%95%8C%E5%92%8C-C-%E4%B8%96%E7%95%8C%EF%BC%9F"><span class="toc-text">等等，Python 世界和 C++ 世界？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BD%93-C-%E7%9A%84%E7%BB%93%E6%9E%9C%E9%9C%80%E8%A6%81%E5%9B%9E%E5%88%B0-Python"><span class="toc-text">当 C++ 的结果需要回到 Python</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98%EF%BC%9A%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BC%9A%E5%A4%9A%E6%AC%A1%E4%BC%A0%E9%80%92%E5%90%8C%E4%B8%80%E4%B8%AA-Tensor%EF%BC%9F"><span class="toc-text">核心问题：什么时候会多次传递同一个 Tensor？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF-THPVariable%EF%BC%9F"><span class="toc-text">什么是 THPVariable？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98%EF%BC%9A%E5%A4%8D%E7%94%A8%E8%80%8C%E9%9D%9E%E9%87%8D%E5%BB%BA"><span class="toc-text">核心问题：复用而非重建</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B4%E6%8E%A5%E5%AD%97%E6%AE%B5%E5%AD%98%E5%82%A8-vs-%E5%93%88%E5%B8%8C%E8%A1%A8"><span class="toc-text">直接字段存储 vs 哈希表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E5%90%91%E5%BC%BA%E5%BC%95%E7%94%A8%E4%B8%8E%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8%E7%AE%A1%E7%90%86"><span class="toc-text">双向强引用与循环引用管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%91%E5%AE%9A%E8%BF%87%E7%A8%8B%EF%BC%9ATHPVariable-WrapWithType"><span class="toc-text">绑定过程：THPVariable_WrapWithType</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E6%A6%82%E8%BF%B0"><span class="toc-text">函数概述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E8%8E%B7%E5%8F%96-PyObjectSlot"><span class="toc-text">第一步：获取 PyObjectSlot</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%E6%A3%80%E6%9F%A5%E7%BC%93%E5%AD%98%EF%BC%88%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91%EF%BC%89"><span class="toc-text">第二步：检查缓存（核心逻辑）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E6%AD%A5%EF%BC%9A%E5%88%9B%E5%BB%BA%E6%96%B0%E5%AF%B9%E8%B1%A1"><span class="toc-text">第三步：创建新对象</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-tp-alloc-%E5%88%86%E9%85%8D%E5%8E%9F%E5%A7%8B%E5%86%85%E5%AD%98"><span class="toc-text">3.1 tp_alloc 分配原始内存</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-2-PyUnstable-EnableTryIncRef"><span class="toc-text">3.2 PyUnstable_EnableTryIncRef</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-3-reinterpret-cast-%E7%B1%BB%E5%9E%8B%E9%87%8D%E8%A7%A3%E9%87%8A"><span class="toc-text">3.3 reinterpret_cast 类型重解释</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-4-placement-new-%E6%9E%84%E9%80%A0%E5%AF%B9%E8%B1%A1"><span class="toc-text">3.4 placement new 构造对象</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E6%AD%A5%EF%BC%9A%E9%80%89%E6%8B%A9%E5%88%9D%E5%A7%8B%E5%8C%96%E8%B7%AF%E5%BE%84"><span class="toc-text">第四步：选择初始化路径</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%83%85%E5%86%B5-A%EF%BC%9A%E5%BF%AB%E9%80%9F%E8%B7%AF%E5%BE%84"><span class="toc-text">情况 A：快速路径</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%83%85%E5%86%B5-B%EF%BC%9A%E6%99%AE%E9%80%9A%E8%B7%AF%E5%BE%84"><span class="toc-text">情况 B：普通路径</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">完整流程图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%80%E5%8C%96%E7%90%86%E8%A7%A3"><span class="toc-text">简化理解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8%EF%BC%9A%E4%B8%8D%E7%94%A8-GIL%EF%BC%8C%E8%80%8C%E7%94%A8-CAS"><span class="toc-text">线程安全：不用 GIL，而用 CAS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%8B%AC%E7%AB%8B%E6%80%A7"><span class="toc-text">生命周期独立性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%B9%E8%B1%A1%E8%BA%AB%E4%BB%BD%E4%B8%A2%E5%A4%B1%EF%BC%9A%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">对象身份丢失：一个真实的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1%EF%BC%9F"><span class="toc-text">为什么这样设计？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93%EF%BC%9A%E7%90%86%E8%A7%A3%E8%AE%BE%E8%AE%A1%E6%9D%83%E8%A1%A1"><span class="toc-text">总结：理解设计权衡</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9APython-%E7%9A%84%E6%B8%A9%E6%9F%94%E4%B8%8E-C-%E7%9A%84%E5%86%B7%E9%85%B7"><span class="toc-text">引言：Python 的温柔与 C++ 的冷酷</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E7%AD%89%EF%BC%8CPython-%E4%B8%96%E7%95%8C%E5%92%8C-C-%E4%B8%96%E7%95%8C%EF%BC%9F"><span class="toc-text">等等，Python 世界和 C++ 世界？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BD%93-C-%E7%9A%84%E7%BB%93%E6%9E%9C%E9%9C%80%E8%A6%81%E5%9B%9E%E5%88%B0-Python"><span class="toc-text">当 C++ 的结果需要回到 Python</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98%EF%BC%9A%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BC%9A%E5%A4%9A%E6%AC%A1%E4%BC%A0%E9%80%92%E5%90%8C%E4%B8%80%E4%B8%AA-Tensor%EF%BC%9F"><span class="toc-text">核心问题：什么时候会多次传递同一个 Tensor？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF-THPVariable%EF%BC%9F"><span class="toc-text">什么是 THPVariable？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98%EF%BC%9A%E5%A4%8D%E7%94%A8%E8%80%8C%E9%9D%9E%E9%87%8D%E5%BB%BA"><span class="toc-text">核心问题：复用而非重建</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B4%E6%8E%A5%E5%AD%97%E6%AE%B5%E5%AD%98%E5%82%A8-vs-%E5%93%88%E5%B8%8C%E8%A1%A8"><span class="toc-text">直接字段存储 vs 哈希表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E5%90%91%E5%BC%BA%E5%BC%95%E7%94%A8%E4%B8%8E%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8%E7%AE%A1%E7%90%86"><span class="toc-text">双向强引用与循环引用管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%91%E5%AE%9A%E8%BF%87%E7%A8%8B%EF%BC%9ATHPVariable-WrapWithType"><span class="toc-text">绑定过程：THPVariable_WrapWithType</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E6%A6%82%E8%BF%B0"><span class="toc-text">函数概述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E8%8E%B7%E5%8F%96-PyObjectSlot"><span class="toc-text">第一步：获取 PyObjectSlot</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%E6%A3%80%E6%9F%A5%E7%BC%93%E5%AD%98%EF%BC%88%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91%EF%BC%89"><span class="toc-text">第二步：检查缓存（核心逻辑）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E6%AD%A5%EF%BC%9A%E5%88%9B%E5%BB%BA%E6%96%B0%E5%AF%B9%E8%B1%A1"><span class="toc-text">第三步：创建新对象</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-tp-alloc-%E5%88%86%E9%85%8D%E5%8E%9F%E5%A7%8B%E5%86%85%E5%AD%98"><span class="toc-text">3.1 tp_alloc 分配原始内存</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-2-PyUnstable-EnableTryIncRef"><span class="toc-text">3.2 PyUnstable_EnableTryIncRef</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-3-reinterpret-cast-%E7%B1%BB%E5%9E%8B%E9%87%8D%E8%A7%A3%E9%87%8A"><span class="toc-text">3.3 reinterpret_cast 类型重解释</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-4-placement-new-%E6%9E%84%E9%80%A0%E5%AF%B9%E8%B1%A1"><span class="toc-text">3.4 placement new 构造对象</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E6%AD%A5%EF%BC%9A%E9%80%89%E6%8B%A9%E5%88%9D%E5%A7%8B%E5%8C%96%E8%B7%AF%E5%BE%84"><span class="toc-text">第四步：选择初始化路径</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%83%85%E5%86%B5-A%EF%BC%9A%E5%BF%AB%E9%80%9F%E8%B7%AF%E5%BE%84"><span class="toc-text">情况 A：快速路径</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%83%85%E5%86%B5-B%EF%BC%9A%E6%99%AE%E9%80%9A%E8%B7%AF%E5%BE%84"><span class="toc-text">情况 B：普通路径</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">完整流程图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%80%E5%8C%96%E7%90%86%E8%A7%A3"><span class="toc-text">简化理解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8%EF%BC%9A%E4%B8%8D%E7%94%A8-GIL%EF%BC%8C%E8%80%8C%E7%94%A8-CAS"><span class="toc-text">线程安全：不用 GIL，而用 CAS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%8B%AC%E7%AB%8B%E6%80%A7"><span class="toc-text">生命周期独立性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%B9%E8%B1%A1%E8%BA%AB%E4%BB%BD%E4%B8%A2%E5%A4%B1%EF%BC%9A%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">对象身份丢失：一个真实的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1%EF%BC%9F"><span class="toc-text">为什么这样设计？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93%EF%BC%9A%E7%90%86%E8%A7%A3%E8%AE%BE%E8%AE%A1%E6%9D%83%E8%A1%A1"><span class="toc-text">总结：理解设计权衡</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-内部机制：Tensor-与-Python-对象的绑定原理"><a href="#PyTorch-内部机制：Tensor-与-Python-对象的绑定原理" class="headerlink" title="PyTorch 内部机制：Tensor 与 Python 对象的绑定原理"></a>PyTorch 内部机制：Tensor 与 Python 对象的绑定原理</h1><h2 id="引言：Python-的温柔与-C-的冷酷"><a href="#引言：Python-的温柔与-C-的冷酷" class="headerlink" title="引言：Python 的温柔与 C++ 的冷酷"></a>引言：Python 的温柔与 C++ 的冷酷</h2><p>当你写下这行代码时：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line">t = torch.tensor([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br></pre></td></tr></table></figure>
+
+<p>你有没有想过，背后究竟发生了什么？</p>
+<p>你可能会说：”这有什么，创建一个 tensor 就完了啊。”</p>
+<h3 id="等等，Python-世界和-C-世界？"><a href="#等等，Python-世界和-C-世界？" class="headerlink" title="等等，Python 世界和 C++ 世界？"></a>等等，Python 世界和 C++ 世界？</h3><p>在继续之前，我们需要先理解一个问题：<strong>为什么 PyTorch 的底层要用 C++？</strong></p>
+<p>Python 是一门解释型语言，它的”温柔”在于语法简洁、使用方便。但这种温柔是有代价的——每次执行一行代码，Python 都要”问”解释器：”这一步该做什么？”这种运行时解析带来了巨大的性能开销。</p>
+<p>而 C++ 是一门编译型语言，代码在运行前就已经被翻译成机器能直接执行的指令，没有中间商赚差价。</p>
+<p>对于深度学习中的矩阵运算这种”简单粗暴”的计算密集型任务，Python 的灵活性反而成了负担。</p>
+<p><strong>具体来说：</strong></p>
+<p>当你执行 <code>t + 1</code> 时：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 这个简单的加法背后发生了什么？</span></span><br><span class="line">result = t + <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>PyTorch 需要：</p>
+<ol>
+<li>检查 <code>t</code> 的形状、数据类型</li>
+<li>分配一块新的内存来存储结果</li>
+<li>遍历每个元素，做加法</li>
+<li>把结果写回内存</li>
+</ol>
+<p>这些操作对 CPU 来说就是”机械劳动”，Python 的灵活性在这里毫无用武之地，反而拖慢了速度。所以 PyTorch 选择用 C++ 实现这些核心计算，把 Python 作为”前端”来提供友好的接口。</p>
+<h3 id="当-C-的结果需要回到-Python"><a href="#当-C-的结果需要回到-Python" class="headerlink" title="当 C++ 的结果需要回到 Python"></a>当 C++ 的结果需要回到 Python</h3><p>现在问题来了：你的代码运行在 Python 世界里，而计算发生在 C++ 世界里。当你执行 <code>t = torch.tensor([1.0, 2.0, 3.0])</code> 时：</p>
+<ol>
+<li>Python 接收到你的请求</li>
+<li>Python 调用 C++ 代码创建了一个 Tensor</li>
+<li>C++ 代码执行完毕，返回一个结果</li>
+<li><strong>这个结果是一个 C++ 的对象，但你的 Python 代码需要的是一个 Python 对象</strong></li>
+</ol>
+<p>在 C++ 世界里，一个 Tensor 就是一个结构体：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">TensorImpl</span> &#123;</span><br><span class="line">    <span class="type">float</span>* data;      <span class="comment">// 指向数据的指针</span></span><br><span class="line">    <span class="type">int64_t</span> size;     <span class="comment">// 数据大小</span></span><br><span class="line">    <span class="comment">// ... 其他元数据</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>但在 Python 世界里，任何东西都是对象，而对象需要一个”头部”来存储类型信息和引用计数。</p>
+<p>当你调用 <code>torch.tensor([1.0, 2.0, 3.0])</code> 时，PyTorch 不能简单地把 C++ 的 <code>TensorImpl</code> 指针直接扔给你。它需要：</p>
+<ol>
+<li>先创建一个合法的 Python 对象（带 PyObject_HEAD）</li>
+<li>把 C++ 的 Tensor 塞到这个 Python 对象里</li>
+</ol>
+<h3 id="核心问题：什么时候会多次传递同一个-Tensor？"><a href="#核心问题：什么时候会多次传递同一个-Tensor？" class="headerlink" title="核心问题：什么时候会多次传递同一个 Tensor？"></a>核心问题：什么时候会多次传递同一个 Tensor？</h3><p>你可能会问：C++ 的 Tensor 什么时候会”多次”传递给 Python？为什么要强调”同一个”Python 对象？</p>
+<p>让我们看一个具体场景：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line">t = torch.tensor([<span class="number">1.0</span>], requires_grad=<span class="literal">True</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;t 的 id: <span class="subst">&#123;<span class="built_in">id</span>(t)&#125;</span>&quot;</span>)  <span class="comment"># 140234567890</span></span><br><span class="line"></span><br><span class="line">loss = t.<span class="built_in">sum</span>()</span><br><span class="line">loss.backward()</span><br><span class="line"></span><br><span class="line"><span class="comment"># 反向传播后，再次访问 t</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;t.grad 的 id: <span class="subst">&#123;<span class="built_in">id</span>(t)&#125;</span>&quot;</span>)  <span class="comment"># 应该是同一个 140234567890</span></span><br><span class="line"><span class="built_in">print</span>(t <span class="keyword">is</span> t)  <span class="comment"># 应该是 True</span></span><br></pre></td></tr></table></figure>
+
+<p>在这个过程中：</p>
+<ol>
+<li><code>t</code> 被传递到 C++ 的 autograd 引擎</li>
+<li>autograd 在 C++ 中执行完反向传播，计算出梯度</li>
+<li>结果需要”放回”到 Python 的 <code>t</code> 对象中</li>
+<li><strong>此时应该返回同一个 Python 对象</strong>，而不是创建一个新的</li>
+</ol>
+<p>如果每次都创建新对象，会有两个严重问题：</p>
+<p><strong>问题 1：对象身份丢失</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">t1 = torch.tensor([<span class="number">1.0</span>])</span><br><span class="line">t2 = torch.tensor([<span class="number">1.0</span>])</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(t1 <span class="keyword">is</span> t2)  <span class="comment"># False - 它们是同一个 Tensor 吗？</span></span><br></pre></td></tr></table></figure>
+
+<p>对于同一个底层 C++ Tensor，如果你多次获取，应该始终返回同一个 Python 对象，这样才能用 <code>t1 is t2</code> 判断它们是否指向同一个底层数据。</p>
+<p><strong>问题 2：用户附加属性丢失</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">t = torch.tensor([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br><span class="line">t.my标记 = <span class="string">&quot;重要数据&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 某些操作触发 C++ -&gt; Python 传递</span></span><br><span class="line"><span class="comment"># 如果创建新对象</span></span><br><span class="line"><span class="built_in">print</span>(t.my标记)  <span class="comment"># &quot;重要数据&quot; 还是丢失了？</span></span><br><span class="line"><span class="built_in">print</span>(<span class="built_in">id</span>(t))     <span class="comment"># 每次获取 id 可能不同</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>所以 PyTorch 需要解决的核心问题是：<strong>如何让同一个 C++ Tensor，多次传递给 Python 时，始终返回同一个 Python 对象？</strong></p>
+<p>这样才能保证：</p>
+<ul>
+<li>对象身份一致：<code>t is t2</code> 能正确判断</li>
+<li>用户属性保留：附加在 Python 对象上的数据不会丢失</li>
+</ul>
+<h2 id="什么是-THPVariable？"><a href="#什么是-THPVariable？" class="headerlink" title="什么是 THPVariable？"></a>什么是 THPVariable？</h2><p>在深入技术细节之前，我们需要先认识一个关键概念：<code>THPVariable</code>。</p>
+<p>如果你是 PyTorch 的老用户，可能见过这个名字，但不一定知道它代表什么。</p>
+<p><strong>THP</strong> 是 <strong>Torch Hybrid Python</strong> 的缩写——这本身就暗示了它的角色：它是连接”Python 端”和”C++ 端”的桥梁。</p>
+<table>
+<thead>
+<tr>
+<th>字母</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>T</strong></td>
+<td><strong>Torch</strong> - 来自 PyTorch 的祖先进化</td>
+</tr>
+<tr>
+<td><strong>H</strong></td>
+<td><strong>Hybrid</strong> - 混合架构的绑定层</td>
+</tr>
+<tr>
+<td><strong>P</strong></td>
+<td><strong>Python</strong> - Python 世界的对象</td>
+</tr>
+</tbody></table>
+<p>这要从 PyTorch 的历史说起。PyTorch 最早是从 Lua 语言的 Torch 库发展而来的。当团队决定用 C++ 重写核心代码后，他们需要一种方式让 Python 能够访问这些 C++ 对象。于是产生了 THP——“Torch Hybrid Python”。</p>
+<p>在源码中，你能看到这样的定义：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Python object that backs torch.autograd.Variable</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">THPVariable</span> &#123;</span><br><span class="line">  PyObject_HEAD</span><br><span class="line">  at::Tensor cdata;              <span class="comment">// C++ Tensor 的实际存储</span></span><br><span class="line">  PyObject* backward_hooks = <span class="literal">nullptr</span>;</span><br><span class="line">  PyObject* post_accumulate_grad_hooks = <span class="literal">nullptr</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p><code>THPVariable</code> 是 Python 端”看到的”Tensor 对象。它包含了 Python 对象必需的 header（<code>PyObject_HEAD</code>），以及指向实际 C++ Tensor 的指针（<code>cdata</code>）。</p>
+<p>注意：这里使用的是 <code>at::Tensor</code>（ATen 库中的类型），而不是简单的 <code>Tensor</code>。ATen 是 PyTorch 的 C++ 张量计算库，所有 Python API 最终都会调用 ATen 来执行实际计算。</p>
+<p>简单来说：</p>
+<ul>
+<li><strong>Python 看到的是</strong> <code>THPVariable</code></li>
+<li><strong>C++ 实际存储的是</strong> <code>at::Tensor</code></li>
+<li><strong>两者通过 <code>cdata</code> 字段连接</strong></li>
+</ul>
+<h2 id="核心问题：复用而非重建"><a href="#核心问题：复用而非重建" class="headerlink" title="核心问题：复用而非重建"></a>核心问题：复用而非重建</h2><p>如果我们每次都创建新的 Python 对象，会带来两个问题：</p>
+<ol>
+<li><strong>性能开销</strong>：创建对象的成本不可忽视</li>
+<li><strong>对象身份丢失</strong>：用户附加的自定义属性会丢失，<code>id(t)</code> 也会变化</li>
+</ol>
+<p>PyTorch 解决这个问题的思路是：<strong>不要每次都重建，而是复用已创建的 Python 对象</strong>。</p>
+<h3 id="直接字段存储-vs-哈希表"><a href="#直接字段存储-vs-哈希表" class="headerlink" title="直接字段存储 vs 哈希表"></a>直接字段存储 vs 哈希表</h3><p>如果你用过 pybind11，可能会知道它如何处理对象绑定：维护一个<strong>全局哈希表</strong>，记录每个 C++ 对象和对应的 Python 对象。下次需要传递同一个 C++ 对象时，查表返回已有的 Python 对象。</p>
+<p>这听起来很合理，但 PyTorch 的开发者们认为：<strong>哈希表的开销不值得</strong>。</p>
+<p>一个更高效的方案是：与其用哈希表，不如在 C++ 对象上直接放一个字段，记录对应的 Python 对象。</p>
+<h2 id="双向强引用与循环引用管理"><a href="#双向强引用与循环引用管理" class="headerlink" title="双向强引用与循环引用管理"></a>双向强引用与循环引用管理</h2><p>这里存在一个双向关系：</p>
+<ul>
+<li>Python 对象持有 C++ Tensor（通过 <code>cdata</code> 字段）</li>
+<li>C++ Tensor 持有 Python 对象（通过 <code>pyobj_slot_</code> 字段）</li>
+</ul>
+<p>这种双向强引用如果处理不当，容易形成循环引用，导致内存永远无法释放。但 PyTorch 通过主动管理来避免这个问题。</p>
+<p>当 Python 对象被垃圾回收时，会执行一个清理过程：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> <span class="type">int</span> <span class="title">THPVariable_clear</span><span class="params">(THPVariable* self)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 清理 hooks</span></span><br><span class="line">  <span class="built_in">Py_CLEAR</span>(self-&gt;backward_hooks);</span><br><span class="line">  <span class="built_in">Py_CLEAR</span>(self-&gt;post_accumulate_grad_hooks);</span><br><span class="line">  <span class="keyword">if</span> (self-&gt;cdata.<span class="built_in">defined</span>()) &#123;</span><br><span class="line">    <span class="keyword">auto</span> pyobj_slot = self-&gt;cdata.<span class="built_in">unsafeGetTensorImpl</span>()-&gt;<span class="built_in">pyobj_slot</span>();</span><br><span class="line">    <span class="comment">// 只有当 pyobj_slot 指向当前对象时才清理（避免竞态条件）</span></span><br><span class="line">    <span class="keyword">if</span> (pyobj_slot-&gt;<span class="built_in">load_pyobj</span>() == (PyObject*)self) &#123;</span><br><span class="line">      <span class="comment">// 清理掉这个指针，切断循环</span></span><br><span class="line">      pyobj_slot-&gt;<span class="built_in">clear</span>();</span><br><span class="line">      <span class="comment">// 验证此时没有其他引用</span></span><br><span class="line">      <span class="built_in">TORCH_INTERNAL_ASSERT</span>(self-&gt;cdata.<span class="built_in">use_count</span>() == <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 在释放 GIL 的情况下释放 C++ 引用（耗时操作）</span></span><br><span class="line">  &#123;</span><br><span class="line">    pybind11::gil_scoped_release no_gil;</span><br><span class="line">    self-&gt;cdata = <span class="built_in">Variable</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关键变化：</p>
+<ol>
+<li><strong>先清理 hooks</strong>：后向传播相关的 hooks 需要先清理</li>
+<li><strong>竞态条件处理</strong>：只有当 <code>pyobj_slot</code> 仍然指向当前对象时才清理（可能存在多线程竞态）</li>
+<li><strong>引用计数断言</strong>：通过 <code>TORCH_INTERNAL_ASSERT</code> 验证此时没有其他引用</li>
+<li><strong>GIL 释放</strong>：对于大型 tensor 的释放操作，会临时释放 GIL 以避免阻塞主线程</li>
+</ol>
+<p>所以循环引用是<strong>被刻意打破</strong>的，不是”意外没处理”。</p>
+<h2 id="绑定过程：THPVariable-WrapWithType"><a href="#绑定过程：THPVariable-WrapWithType" class="headerlink" title="绑定过程：THPVariable_WrapWithType"></a>绑定过程：THPVariable_WrapWithType</h2><p>当 C++ Tensor 需要传递给 Python 时，PyTorch 执行的是 <code>THPVariable_WrapWithType</code> 函数。这个函数是整个绑定机制的核心。</p>
+<h3 id="函数概述"><a href="#函数概述" class="headerlink" title="函数概述"></a>函数概述</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">static</span> PyObject* <span class="title">THPVariable_WrapWithType</span><span class="params">(T&amp;&amp; var, ...)</span> </span>&#123;</span><br></pre></td></tr></table></figure>
+
+<p>这是一个<strong>模板函数</strong>，可以接受 <code>Tensor&amp;</code>（左值）或 <code>Tensor&amp;&amp;</code>（右值引用）。它的目的是：<strong>把 C++ 的 Tensor 变成 Python 对象返回</strong>。</p>
+<p>返回值是 <code>PyObject*</code>，这是 Python 对象的通用类型。</p>
+<hr>
+<h3 id="第一步：获取-PyObjectSlot"><a href="#第一步：获取-PyObjectSlot" class="headerlink" title="第一步：获取 PyObjectSlot"></a>第一步：获取 PyObjectSlot</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 获取 PyObjectSlot</span></span><br><span class="line">c10::TensorImpl* tensor_impl = var.<span class="built_in">unsafeGetTensorImpl</span>();</span><br><span class="line">c10::impl::PyObjectSlot* pyobj_slot = tensor_impl-&gt;<span class="built_in">pyobj_slot</span>();</span><br></pre></td></tr></table></figure>
+
+<p>还记得之前说的 <code>pyobj_slot_</code> 字段吗？这里就是获取它。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">TensorImpl</span><br><span class="line">    │</span><br><span class="line">    └── pyobj_slot_ ──────────► 存储对应的 Python 对象</span><br></pre></td></tr></table></figure>
+
+<p><code>tensor_impl</code> 是 C++ Tensor 的内部结构，<code>pyobj_slot</code> 是专门用来存储”对应的 Python 对象”的字段。</p>
+<hr>
+<h3 id="第二步：检查缓存（核心逻辑）"><a href="#第二步：检查缓存（核心逻辑）" class="headerlink" title="第二步：检查缓存（核心逻辑）"></a>第二步：检查缓存（核心逻辑）</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 2. 关键检查：是否已有缓存的 Python 对象？</span></span><br><span class="line">PyObject* obj = pyobj_slot-&gt;<span class="built_in">load_pyobj</span>();</span><br><span class="line"><span class="keyword">if</span> (obj) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Py_NewRef</span>(obj);  <span class="comment">// 有缓存，直接复用</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是<strong>最关键的一行</strong>。</p>
+<p><code>load_pyobj()</code> 读取 <code>pyobj_slot_</code> 字段，看它是否已经指向了一个 Python 对象。</p>
+<ul>
+<li><strong>如果有缓存</strong>（<code>obj</code> 非空）：直接返回这个对象，增加引用计数</li>
+<li><strong>如果没有缓存</strong>：需要创建新对象</li>
+</ul>
+<p>为什么要用”有缓存就复用”？</p>
+<ol>
+<li><strong>性能好</strong>——不需要每次都创建新对象</li>
+<li><strong>对象身份一致</strong>——多次获取返回同一个 Python 对象</li>
+</ol>
+<hr>
+<h3 id="第三步：创建新对象"><a href="#第三步：创建新对象" class="headerlink" title="第三步：创建新对象"></a>第三步：创建新对象</h3><p>当没有缓存时，需要创建新的 Python 对象来包装 C++ Tensor。这一步分为多步：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 3. 没有缓存，创建新对象</span></span><br><span class="line">obj = type-&gt;<span class="built_in">tp_alloc</span>(type, <span class="number">0</span>);  <span class="comment">// 分配原始内存</span></span><br><span class="line"><span class="built_in">TORCH_CHECK</span>(obj, <span class="string">&quot;Failed to allocate a &quot;</span>, type-&gt;tp_name, <span class="string">&quot; object&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 在自由线程 Python 中启用 try_incref</span></span><br><span class="line"><span class="built_in">PyUnstable_EnableTryIncRef</span>(obj);</span><br><span class="line"></span><br><span class="line"><span class="keyword">auto</span> v = <span class="built_in">reinterpret_cast</span>&lt;THPVariable*&gt;(obj);</span><br><span class="line"><span class="keyword">new</span> (&amp;v-&gt;cdata) <span class="built_in">Tensor</span>(std::forward&lt;T&gt;(var));  <span class="comment">// 构造 C++ Tensor 对象</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="3-1-tp-alloc-分配原始内存"><a href="#3-1-tp-alloc-分配原始内存" class="headerlink" title="3.1 tp_alloc 分配原始内存"></a>3.1 tp_alloc 分配原始内存</h4><p><code>type-&gt;tp_alloc(type, 0)</code> 是 Python 的对象分配函数。它分配一块<strong>原始内存</strong>，但不调用任何构造函数。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">tp_alloc 返回的内存：</span><br><span class="line">┌────────────────────────────┐</span><br><span class="line">│  未初始化的原始内存         │</span><br><span class="line">│  （没有调用任何构造函数）    │</span><br><span class="line">└────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h4 id="3-2-PyUnstable-EnableTryIncRef"><a href="#3-2-PyUnstable-EnableTryIncRef" class="headerlink" title="3.2 PyUnstable_EnableTryIncRef"></a>3.2 PyUnstable_EnableTryIncRef</h4><p>这是一个针对<strong>自由线程 Python</strong>（free-threaded Python，即无 GIL 的 Python）的兼容性处理。在 Python 3.13+ 引入了自由线程模式，多个线程可以同时执行 Python 代码。<code>PyUnstable_EnableTryIncRef</code> 允许对象在这种环境下正确处理引用计数。</p>
+<h4 id="3-3-reinterpret-cast-类型重解释"><a href="#3-3-reinterpret-cast-类型重解释" class="headerlink" title="3.3 reinterpret_cast 类型重解释"></a>3.3 reinterpret_cast 类型重解释</h4><p><code>reinterpret_cast&lt;THPVariable*&gt;(obj)</code> 告诉编译器：”把这块内存当成 <code>THPVariable*</code> 来用”。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">obj 的原始类型：PyObject* （Python 对象通用指针）</span><br><span class="line">     │</span><br><span class="line">     │ <span class="keyword">reinterpret_cast</span></span><br><span class="line">     ▼</span><br><span class="line">v 的类型：THPVariable* （具体类型）</span><br></pre></td></tr></table></figure>
+
+<h4 id="3-4-placement-new-构造对象"><a href="#3-4-placement-new-构造对象" class="headerlink" title="3.4 placement new 构造对象"></a>3.4 placement new 构造对象</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">new</span> (&amp;v-&gt;cdata) <span class="built_in">Tensor</span>(std::forward&lt;T&gt;(var));</span><br></pre></td></tr></table></figure>
+
+<p>这是 <strong>placement new</strong>（定位 new），不是普通的 <code>new</code>。</p>
+<p><strong>普通 new</strong>：分配内存 + 调用构造函数</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Tensor* p = <span class="keyword">new</span> <span class="built_in">Tensor</span>(args);</span><br></pre></td></tr></table></figure>
+
+<p><strong>placement new</strong>：只在指定地址调用构造函数</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> buffer[<span class="built_in">sizeof</span>(Tensor)];   <span class="comment">// 预分配内存</span></span><br><span class="line">Tensor* p = <span class="built_in">new</span> (buffer) <span class="built_in">Tensor</span>(args);  <span class="comment">// 只调用构造函数，不分配内存</span></span><br></pre></td></tr></table></figure>
+
+<p>这里为什么需要 placement new？因为 <code>tp_alloc</code> 分配的内存不属于 C++ 的堆，用普通 <code>new</code> 无法正确构造对象。placement new 允许我们在任意内存地址上构造对象。</p>
+<hr>
+<h3 id="第四步：选择初始化路径"><a href="#第四步：选择初始化路径" class="headerlink" title="第四步：选择初始化路径"></a>第四步：选择初始化路径</h3><p>创建完新对象后，需要把 C++ Tensor 和 Python 对象绑定起来。但此时可能有线程竞争，所以要根据情况选择不同的绑定策略：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 4. 根据情况选择初始化路径</span></span><br><span class="line"><span class="keyword">if</span> (<span class="built_in">THPVariable_Unpack</span>(obj).<span class="built_in">is_uniquely_owned</span>()) &#123;</span><br><span class="line">    <span class="comment">// 快速路径：只有一个引用，不需要原子操作</span></span><br><span class="line">    PyObjectPreservation::<span class="built_in">init_fresh_nonatomic</span>(tensor_impl, pyobj_slot, obj);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// 普通路径：处理多线程竞争</span></span><br><span class="line">    PyObject* wrapper = PyObjectPreservation::<span class="built_in">init_once</span>(tensor_impl, pyobj_slot, obj);</span><br><span class="line">    <span class="keyword">if</span> (wrapper != obj) &#123;</span><br><span class="line">        <span class="built_in">Py_DECREF</span>(obj);  <span class="comment">// 另一个线程抢先了，用它的对象</span></span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">Py_NewRef</span>(wrapper);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> obj;</span><br></pre></td></tr></table></figure>
+
+<h4 id="情况-A：快速路径"><a href="#情况-A：快速路径" class="headerlink" title="情况 A：快速路径"></a>情况 A：快速路径</h4><p>如果这个 Tensor 只被当前这一个引用持有（<code>is_uniquely_owned()</code> 返回 true），说明<strong>绝对不可能有线程竞争</strong>，可以直接写入 <code>pyobj_slot_</code>，使用更高效的 non-atomic 操作。</p>
+<h4 id="情况-B：普通路径"><a href="#情况-B：普通路径" class="headerlink" title="情况 B：普通路径"></a>情况 B：普通路径</h4><p>如果 Tensor 被多个引用持有，可能有多个线程同时尝试绑定。此时：</p>
+<ol>
+<li>用 CAS（原子操作）尝试设置 <code>pyobj_slot_</code></li>
+<li>如果 CAS 失败（另一个线程抢先了），就放弃自己创建的对象，用那个”已经存在的对象”</li>
+<li><code>return Py_NewRef(wrapper)</code> - 返回另一个线程创建的对象</li>
+</ol>
+<hr>
+<h3 id="完整流程图"><a href="#完整流程图" class="headerlink" title="完整流程图"></a>完整流程图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line">┌──────────────────────────────────────────────────────────────┐</span><br><span class="line">│                  THPVariable_WrapWithType                    │</span><br><span class="line">└──────────────────────────────────────────────────────────────┘</span><br><span class="line">                              │</span><br><span class="line">                              ▼</span><br><span class="line">                    ┌───────────────────┐</span><br><span class="line">                    │ 获取 PyObjectSlot │</span><br><span class="line">                    └───────────────────┘</span><br><span class="line">                              │</span><br><span class="line">                              ▼</span><br><span class="line">                    ┌───────────────────┐</span><br><span class="line">                    │ load_pyobj()     │</span><br><span class="line">                    │ 读取缓存？        │</span><br><span class="line">                    └───────────────────┘</span><br><span class="line">                              │</span><br><span class="line">              ┌───────────────┴───────────────┐</span><br><span class="line">              │                               │</span><br><span class="line">         有缓存                             无缓存</span><br><span class="line">              │                               │</span><br><span class="line">              ▼                               ▼</span><br><span class="line">        ┌───────────┐                  ┌─────────────────┐</span><br><span class="line">        │ 直接返回   │                  │ 创建新 Python   │</span><br><span class="line">        │ Py_NewRef │                  │ 对象            │</span><br><span class="line">        └───────────┘                  └─────────────────┘</span><br><span class="line">                                              │</span><br><span class="line">                                              ▼</span><br><span class="line">                              ┌───────────────────────────────┐</span><br><span class="line">                              │ is_uniquely_owned() ?       │</span><br><span class="line">                              └───────────────────────────────┘</span><br><span class="line">                                            │</span><br><span class="line">                          ┌─────────────────┴─────────────────┐</span><br><span class="line">                          │                                   │</span><br><span class="line">                       是                                    否</span><br><span class="line">                          │                                   │</span><br><span class="line">                          ▼                                   ▼</span><br><span class="line">                   ┌───────────────┐              ┌─────────────────┐</span><br><span class="line">                   │ 快速路径      │              │ CAS 原子操作     │</span><br><span class="line">                   │ 无需原子操作  │              │ init_once        │</span><br><span class="line">                   └───────────────┘              └─────────────────┘</span><br><span class="line">                                                         │</span><br><span class="line">                                               ┌─────────┴─────────┐</span><br><span class="line">                                               │                     │</span><br><span class="line">                                          CAS 成功               CAS 失败</span><br><span class="line">                                               │                     │</span><br><span class="line">                                               ▼                     ▼</span><br><span class="line">                                         ┌───────────┐       ┌─────────────┐</span><br><span class="line">                                         │ 返回新对象 │       │ 返回已有对象 │</span><br><span class="line">                                         │ 保存绑定   │       │ 丢弃新对象   │</span><br><span class="line">                                         └───────────┘       └─────────────┘</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h3 id="简化理解"><a href="#简化理解" class="headerlink" title="简化理解"></a>简化理解</h3><p>这个函数的核心逻辑只有三行：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">PyObject* obj = pyobj_slot-&gt;<span class="built_in">load_pyobj</span>();  <span class="comment">// 1. 查缓存</span></span><br><span class="line"><span class="keyword">if</span> (obj) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Py_NewRef</span>(obj);  <span class="comment">// 2. 有缓存直接返回</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 3. 没缓存创建新对象并绑定</span></span><br></pre></td></tr></table></figure>
+
+<p>其他代码都是处理边界情况（多线程竞争、所有权状态等）。</p>
+<h2 id="线程安全：不用-GIL，而用-CAS"><a href="#线程安全：不用-GIL，而用-CAS" class="headerlink" title="线程安全：不用 GIL，而用 CAS"></a>线程安全：不用 GIL，而用 CAS</h2><p>你可能会想：Python 不是有 GIL 保护所有对象操作吗？</p>
+<p>但问题在于，<code>pyobj_slot</code> 的写入发生在 C++ 层，此时 Python 解释器还没参与进来。GIL 只保护 Python 对象，<strong>保护不了 C++ 对象的创建过程</strong>。</p>
+<p>PyTorch 的解决方案是：<strong>CAS（Compare-And-Swap）原子操作</strong>。</p>
+<p>当两个线程同时尝试绑定同一个 Tensor 时，<code>init_once</code> 使用 compare_exchange_strong 来确保只有一个线程能成功设置 <code>pyobj_slot_</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">PyObject* <span class="title">PyObjectPreservation::init_once</span><span class="params">(..., PyObject* pyobj)</span> </span>&#123;</span><br><span class="line">  PyObject* expected = <span class="literal">nullptr</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// CAS 操作：只有一个线程能成功设置</span></span><br><span class="line">  <span class="keyword">if</span> (!slot-&gt;pyobj_.<span class="built_in">compare_exchange_strong</span>(expected, pyobj, ...)) &#123;</span><br><span class="line">    <span class="comment">// 另一个线程已经设置过了，返回它设置的对象</span></span><br><span class="line">    <span class="keyword">return</span> expected;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// ... 继续初始化</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这确保了即使多线程并发，也只有一个 Python 对象会被绑定到某个 Tensor 上。</p>
+<h2 id="生命周期独立性"><a href="#生命周期独立性" class="headerlink" title="生命周期独立性"></a>生命周期独立性</h2><p>这里有一个重要的问题值得思考：</p>
+<p><strong>如果 Python 对象被释放，C++ Tensor 也会跟着释放吗？反过来呢？</strong></p>
+<p>直觉上，你可能觉得答案是”会”，毕竟它们是”强绑定”的。</p>
+<p>但实际情况是：<strong>两者的生命周期是独立的</strong>。</p>
+<p>Python 对象和 C++ 对象各有独立的引用计数系统：</p>
+<ul>
+<li>Python refcount 控制 THPVariable 的生命周期</li>
+<li>C++ refcount 控制 TensorImpl 的生命周期</li>
+</ul>
+<p>两者通过 <code>pyobj_slot</code> 和 <code>incref/decref</code> 协调，但不存在”生死绑定”的关系：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>Python 对象</th>
+<th>C++ 对象</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>删除 Python 变量 <code>t</code></td>
+<td>Python ref &#x3D; 0 → THPVariable 被 GC 回收</td>
+<td>C++ ref 可能仍 &gt; 0 → TensorImpl 仍然存活</td>
+</tr>
+<tr>
+<td>C++ 引用全部释放</td>
+<td>Python ref 仍 &#x3D; 1 → Python 对象仍存活，但 pyobj_slot 已被清空</td>
+<td>C++ ref &#x3D; 0 → TensorImpl 被释放</td>
+</tr>
+</tbody></table>
+<p>这意味着：当你”del t”一个 Tensor 时，C++ 的底层数据可能还活着。</p>
+<h2 id="对象身份丢失：一个真实的问题"><a href="#对象身份丢失：一个真实的问题" class="headerlink" title="对象身份丢失：一个真实的问题"></a>对象身份丢失：一个真实的问题</h2><p>现在我们来到了一个关键的陷阱。</p>
+<p>如果你给一个 Tensor 设置了自定义属性，然后这个 Tensor 的 Python 对象被 GC 回收了，下次你再访问同一个 C++ Tensor 时，会得到一个<strong>全新的 Python 对象</strong>——它不再是”原来那个”了。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line">t = torch.tensor([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br><span class="line">t.my标记 = <span class="string">&quot;重要数据&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 某些操作会导致 Python 对象被 GC</span></span><br><span class="line"><span class="comment"># 比如 Tensor 被传递给 C++ 并暂时脱离了 Python 的引用链</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 之后再次访问同一个 Tensor</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;id: <span class="subst">&#123;<span class="built_in">id</span>(t)&#125;</span>, my标记: <span class="subst">&#123;<span class="built_in">getattr</span>(t, <span class="string">&#x27;my标记&#x27;</span>, <span class="string">&#x27;丢失了&#x27;</span>)&#125;</span>&quot;</span>)</span><br><span class="line"><span class="comment"># id 可能已经变了</span></span><br><span class="line"><span class="comment"># my标记: 丢失了</span></span><br></pre></td></tr></table></figure>
+
+<p>这听起来像个 bug？实际上，这是当前设计的<strong>固有特性</strong>。</p>
+<p>为什么这么说？因为 Python 对象被回收时，<code>pyobj_slot</code> 被清空了。下次再传递这个 Tensor 到 Python 时，PyTorch 认为这是”第一次”，所以创建新对象。</p>
+<p>这是一个权衡：</p>
+<ul>
+<li><strong>优势</strong>：不需要全局哈希表，性能更好</li>
+<li><strong>代价</strong>：Python 附加属性在某些场景下会丢失</li>
+</ul>
+<h2 id="为什么这样设计？"><a href="#为什么这样设计？" class="headerlink" title="为什么这样设计？"></a>为什么这样设计？</h2><p>你可能会问：为什么不干脆用哈希表保证同一性？</p>
+<p>开发者们权衡了很久：</p>
+<ol>
+<li><strong>性能优先</strong>：每次绑定都查哈希表，在高性能场景下是不可接受的</li>
+<li><strong>简单直接</strong>：O(1) 字段访问远比哈希表查找快</li>
+<li><strong>历史原因</strong>：PyTorch 最早的设计就是为了追求极致性能</li>
+</ol>
+<p>所以这是<strong>刻意的工程决策</strong>，不是疏忽。它在大多数场景下工作得很好，但在某些边界情况下会暴露这个限制。</p>
+<h2 id="总结：理解设计权衡"><a href="#总结：理解设计权衡" class="headerlink" title="总结：理解设计权衡"></a>总结：理解设计权衡</h2><p>PyTorch 的 Tensor-Python 绑定机制背后，是一系列精心权衡：</p>
+<table>
+<thead>
+<tr>
+<th>设计决策</th>
+<th>权衡</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>直接字段存储 vs 哈希表</strong></td>
+<td>性能 vs 全局状态</td>
+</tr>
+<tr>
+<td><strong>强引用 vs 弱引用</strong></td>
+<td>生命周期管理复杂性 vs 对象身份保持</td>
+</tr>
+<tr>
+<td><strong>引用计数协调</strong></td>
+<td>同步成本 vs 内存安全</td>
+</tr>
+</tbody></table>
+<p>这些决策没有绝对的对错，只有适合与否。PyTorch 选择了一条<strong>性能优先</strong>的道路，为此在某些边界情况下付出了代价——但对大多数用户来说，这通常是透明的。</p>
+<p>理解这些设计背后的思路，能帮助你在遇到”奇怪”的问题时，快速定位根源。毕竟，当你知道规则是什么的时候，例外也就没那么可怕了。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_1.pytorch-tensor-binding/">http://example.com/2026/05/24/publish_1.pytorch-tensor-binding/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_3.pytorch-library-structure/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch library structure
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_4.pytorch-cpu-vectorization/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch cpu vectorization
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

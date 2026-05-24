@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch cuda intro | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch CUDA 入门：异步执行与性能优化引言：GPU 与 CUDA 概览深度学习的成功离不开 GPU 的并行计算能力。理解 CUDA 编程模型，特别是异步执行机制，对编写高效、易调试的 PyTorch 代码至关重要。 CPU vs GPU：核心设计差异   特性 CPU GPU    核心数 少数几个强大核心（32~64） 成千上万个简单核心   设计目标 复杂逻辑、顺序执行 大量简单并">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch cuda intro">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_6.pytorch-cuda-intro/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch CUDA 入门：异步执行与性能优化引言：GPU 与 CUDA 概览深度学习的成功离不开 GPU 的并行计算能力。理解 CUDA 编程模型，特别是异步执行机制，对编写高效、易调试的 PyTorch 代码至关重要。 CPU vs GPU：核心设计差异   特性 CPU GPU    核心数 少数几个强大核心（32~64） 成千上万个简单核心   设计目标 复杂逻辑、顺序执行 大量简单并">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.200Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch cuda intro
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9AGPU-%E4%B8%8E-CUDA-%E6%A6%82%E8%A7%88"><span class="toc-text">引言：GPU 与 CUDA 概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-vs-GPU%EF%BC%9A%E6%A0%B8%E5%BF%83%E8%AE%BE%E8%AE%A1%E5%B7%AE%E5%BC%82"><span class="toc-text">CPU vs GPU：核心设计差异</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CUDA-%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-text">CUDA 编程模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%9C%BA%E4%B8%8E%E8%AE%BE%E5%A4%87"><span class="toc-text">主机与设备</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%A6%82%E5%BF%B5"><span class="toc-text">关键概念</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%EF%BC%9A%E5%BC%82%E6%AD%A5%E6%89%A7%E8%A1%8C"><span class="toc-text">核心：异步执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CUDA-%E6%93%8D%E4%BD%9C%E6%98%AF%E5%BC%82%E6%AD%A5%E7%9A%84"><span class="toc-text">CUDA 操作是异步的</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3%E8%AF%B4%E6%98%8E"><span class="toc-text">官方文档说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E5%B8%A6%E6%9D%A5%E7%9A%84%E5%90%8E%E6%9E%9C"><span class="toc-text">异步带来的后果</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E8%AF%95%EF%BC%9ACUDA-LAUNCH-BLOCKING"><span class="toc-text">调试：CUDA_LAUNCH_BLOCKING</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Streams%EF%BC%88%E6%B5%81%EF%BC%89"><span class="toc-text">Streams（流）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%9C%E7%94%A8"><span class="toc-text">作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BD%93%E5%89%8D%E8%AE%BE%E5%A4%87%E7%AE%A1%E7%90%86"><span class="toc-text">当前设备管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%93%8D%E4%BD%9C%E7%9A%84%E6%88%90%E6%9C%AC"><span class="toc-text">同步操作的成本</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9A%90%E5%BC%8F%E5%90%8C%E6%AD%A5%E7%82%B9"><span class="toc-text">隐式同步点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%82%E8%B4%B5%EF%BC%9F"><span class="toc-text">为什么昂贵？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PyTorch-%E7%9A%84%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%93%B2%E5%AD%A6"><span class="toc-text">PyTorch 的错误处理哲学</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%B9%E7%95%8C%E6%A3%80%E6%9F%A5"><span class="toc-text">边界检查</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E5%81%9A%EF%BC%9F"><span class="toc-text">为什么这样做？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E8%AF%86%E5%88%AB%E5%90%8C%E6%AD%A5%E6%93%8D%E4%BD%9C"><span class="toc-text">1. 识别同步操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%BC%82%E6%AD%A5%E8%B0%83%E8%AF%95"><span class="toc-text">2. 异步调试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%A4%9A-GPU-%E6%98%BE%E5%BC%8F%E7%AE%A1%E7%90%86"><span class="toc-text">3. 多 GPU 显式管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9AGPU-%E4%B8%8E-CUDA-%E6%A6%82%E8%A7%88"><span class="toc-text">引言：GPU 与 CUDA 概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CPU-vs-GPU%EF%BC%9A%E6%A0%B8%E5%BF%83%E8%AE%BE%E8%AE%A1%E5%B7%AE%E5%BC%82"><span class="toc-text">CPU vs GPU：核心设计差异</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CUDA-%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-text">CUDA 编程模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%9C%BA%E4%B8%8E%E8%AE%BE%E5%A4%87"><span class="toc-text">主机与设备</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%A6%82%E5%BF%B5"><span class="toc-text">关键概念</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%EF%BC%9A%E5%BC%82%E6%AD%A5%E6%89%A7%E8%A1%8C"><span class="toc-text">核心：异步执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CUDA-%E6%93%8D%E4%BD%9C%E6%98%AF%E5%BC%82%E6%AD%A5%E7%9A%84"><span class="toc-text">CUDA 操作是异步的</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3%E8%AF%B4%E6%98%8E"><span class="toc-text">官方文档说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E5%B8%A6%E6%9D%A5%E7%9A%84%E5%90%8E%E6%9E%9C"><span class="toc-text">异步带来的后果</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E8%AF%95%EF%BC%9ACUDA-LAUNCH-BLOCKING"><span class="toc-text">调试：CUDA_LAUNCH_BLOCKING</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Streams%EF%BC%88%E6%B5%81%EF%BC%89"><span class="toc-text">Streams（流）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%9C%E7%94%A8"><span class="toc-text">作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BD%93%E5%89%8D%E8%AE%BE%E5%A4%87%E7%AE%A1%E7%90%86"><span class="toc-text">当前设备管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%93%8D%E4%BD%9C%E7%9A%84%E6%88%90%E6%9C%AC"><span class="toc-text">同步操作的成本</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9A%90%E5%BC%8F%E5%90%8C%E6%AD%A5%E7%82%B9"><span class="toc-text">隐式同步点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%82%E8%B4%B5%EF%BC%9F"><span class="toc-text">为什么昂贵？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PyTorch-%E7%9A%84%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%93%B2%E5%AD%A6"><span class="toc-text">PyTorch 的错误处理哲学</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%B9%E7%95%8C%E6%A3%80%E6%9F%A5"><span class="toc-text">边界检查</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E5%81%9A%EF%BC%9F"><span class="toc-text">为什么这样做？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E8%AF%86%E5%88%AB%E5%90%8C%E6%AD%A5%E6%93%8D%E4%BD%9C"><span class="toc-text">1. 识别同步操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%BC%82%E6%AD%A5%E8%B0%83%E8%AF%95"><span class="toc-text">2. 异步调试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%A4%9A-GPU-%E6%98%BE%E5%BC%8F%E7%AE%A1%E7%90%86"><span class="toc-text">3. 多 GPU 显式管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-CUDA-入门：异步执行与性能优化"><a href="#PyTorch-CUDA-入门：异步执行与性能优化" class="headerlink" title="PyTorch CUDA 入门：异步执行与性能优化"></a>PyTorch CUDA 入门：异步执行与性能优化</h1><h2 id="引言：GPU-与-CUDA-概览"><a href="#引言：GPU-与-CUDA-概览" class="headerlink" title="引言：GPU 与 CUDA 概览"></a>引言：GPU 与 CUDA 概览</h2><p>深度学习的成功离不开 GPU 的并行计算能力。理解 CUDA 编程模型，特别是<strong>异步执行</strong>机制，对编写高效、易调试的 PyTorch 代码至关重要。</p>
+<h3 id="CPU-vs-GPU：核心设计差异"><a href="#CPU-vs-GPU：核心设计差异" class="headerlink" title="CPU vs GPU：核心设计差异"></a>CPU vs GPU：核心设计差异</h3><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>CPU</th>
+<th>GPU</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>核心数</td>
+<td>少数几个强大核心（32~64）</td>
+<td>成千上万个简单核心</td>
+</tr>
+<tr>
+<td>设计目标</td>
+<td>复杂逻辑、顺序执行</td>
+<td>大量简单并行计算</td>
+</tr>
+<tr>
+<td>擅长</td>
+<td>分支判断、递归</td>
+<td>矩阵运算、向量操作</td>
+</tr>
+</tbody></table>
+<p>GPU 的并行模式：</p>
+<ul>
+<li>CPU 像一位数学家，一个接一个计算</li>
+<li>GPU 像数千名小学生组成方阵，每人负责一个数字，同时动手，瞬间完成</li>
+</ul>
+<hr>
+<h2 id="CUDA-编程模型"><a href="#CUDA-编程模型" class="headerlink" title="CUDA 编程模型"></a>CUDA 编程模型</h2><h3 id="主机与设备"><a href="#主机与设备" class="headerlink" title="主机与设备"></a>主机与设备</h3><p>GPU 是独立硬件，有自己的显存。编程时：</p>
+<ul>
+<li><strong>Host（主机）</strong>：CPU 端，负责发起计算、内存拷贝</li>
+<li><strong>Device（设备）</strong>：GPU 端，执行核函数（Kernel）</li>
+</ul>
+<h3 id="关键概念"><a href="#关键概念" class="headerlink" title="关键概念"></a>关键概念</h3><ol>
+<li><strong>内存拷贝</strong>：数据必须从 CPU 内存复制到 GPU 显存</li>
+<li><strong>核函数（Kernel）</strong>：在 GPU 上并行执行的函数</li>
+<li><strong>核函数启动</strong>：CPU 调用并启动 GPU 执行</li>
+</ol>
+<hr>
+<h2 id="核心：异步执行"><a href="#核心：异步执行" class="headerlink" title="核心：异步执行"></a>核心：异步执行</h2><h3 id="CUDA-操作是异步的"><a href="#CUDA-操作是异步的" class="headerlink" title="CUDA 操作是异步的"></a>CUDA 操作是异步的</h3><p>当 CPU 调用 GPU 核函数时，<strong>不会等待 GPU 执行完成</strong>才返回，而是立即返回。</p>
+<p><a href="aten/src/ATen/native/cuda/jit_utils.cpp#L1699-L1722">aten&#x2F;src&#x2F;ATen&#x2F;native&#x2F;cuda&#x2F;jit_utils.cpp:1699-1722</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">launch_jitted_pwise_function</span><span class="params">(...)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">initializeCudaContext</span>();</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span>&amp; nvrtc = at::<span class="built_in">globalContext</span>().<span class="built_in">getNVRTC</span>();</span><br><span class="line">  <span class="keyword">auto</span> stream = at::cuda::<span class="built_in">getCurrentCUDAStream</span>();  <span class="comment">// 获取当前流</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 关键：这里只是把核函数加入队列，不是等待执行完成</span></span><br><span class="line">  <span class="built_in">AT_CUDA_DRIVER_CHECK</span>(nvrtc.<span class="built_in">cuLaunchKernel</span>(</span><br><span class="line">    function.function,</span><br><span class="line">    nBlocks.x, nBlocks.y, nBlocks.z,</span><br><span class="line">    kBlockSize.x, kBlockSize.y, kBlockSize.z,</span><br><span class="line">    smem,</span><br><span class="line">    stream,                              <span class="comment">// 传入 stream</span></span><br><span class="line">    <span class="built_in">const_cast</span>&lt;<span class="type">void</span>**&gt;(args),</span><br><span class="line">    <span class="literal">nullptr</span>));  <span class="comment">// 调用后立即返回，GPU 在后台异步执行</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>核心点</strong>：<code>cudaLaunchKernel</code> 把核函数<strong>加入队列</strong>后就返回了，CPU 继续执行后续代码，GPU 在后台异步执行。</p>
+<h3 id="官方文档说明"><a href="#官方文档说明" class="headerlink" title="官方文档说明"></a>官方文档说明</h3><p><a href="docs/source/notes/cuda.rst#L280-L295">docs&#x2F;source&#x2F;notes&#x2F;cuda.rst:280-295</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">By <span class="keyword">default</span>, GPU operations are asynchronous. When you call a function that</span><br><span class="line">uses the GPU, the operations are *enqueued* to the particular device, but <span class="keyword">not</span></span><br><span class="line">necessarily executed until later. This allows us to execute more computations</span><br><span class="line">in parallel, including operations on CPU <span class="keyword">or</span> other GPUs.</span><br></pre></td></tr></table></figure>
+
+<h3 id="异步带来的后果"><a href="#异步带来的后果" class="headerlink" title="异步带来的后果"></a>异步带来的后果</h3><p>因为核函数是异步执行的，错误会延迟报告：</p>
+<p><a href="c10/cuda/CUDAMiscFunctions.cpp#L31-L44">c10&#x2F;cuda&#x2F;CUDAMiscFunctions.cpp:31-44</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> <span class="string">&quot;\nCUDA kernel errors might be asynchronously reported at some&quot;</span></span><br><span class="line">       <span class="string">&quot; other API call, so the stacktrace below might be incorrect.&quot;</span></span><br><span class="line">       <span class="string">&quot;\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1&quot;</span>;</span><br></pre></td></tr></table></figure>
+
+<p>这就是为什么 CUDA 错误经常在”不相关”的地方报出来。</p>
+<h3 id="调试：CUDA-LAUNCH-BLOCKING"><a href="#调试：CUDA-LAUNCH-BLOCKING" class="headerlink" title="调试：CUDA_LAUNCH_BLOCKING"></a>调试：CUDA_LAUNCH_BLOCKING</h3><p><a href="c10/cuda/CUDAFunctions.cpp#L147-L154">c10&#x2F;cuda&#x2F;CUDAFunctions.cpp:147-154</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">device_synchronize</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="built_in">C10_CUDA_CHECK</span>(<span class="built_in">cudaDeviceSynchronize</span>());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 强制同步执行，错误会立即在发生处报告</span></span><br><span class="line">CUDA_LAUNCH_BLOCKING=1 python your_script.py</span><br></pre></td></tr></table></figure>
+
+<p>虽然严重拖慢性能，但能准确定位问题。</p>
+<hr>
+<h2 id="Streams（流）"><a href="#Streams（流）" class="headerlink" title="Streams（流）"></a>Streams（流）</h2><h3 id="作用"><a href="#作用" class="headerlink" title="作用"></a>作用</h3><p>同一个 Stream 内的操作按顺序执行。用于：</p>
+<ul>
+<li>确保计算顺序（如卷积 → 激活）</li>
+<li>掩盖内存拷贝延迟</li>
+</ul>
+<p><a href="c10/cuda/CUDAStream.h#L60-L88">c10&#x2F;cuda&#x2F;CUDAStream.h:60-88</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">C10_CUDA_API</span> CUDAStream &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function"><span class="keyword">operator</span> <span class="title">cudaStream_t</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">stream</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">synchronize</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  <span class="function"><span class="type">int</span> <span class="title">priority</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    DeviceGuard guard&#123;stream_.<span class="built_in">device</span>()&#125;;</span><br><span class="line">    <span class="type">int</span> priority = <span class="number">0</span>;</span><br><span class="line">    <span class="built_in">C10_CUDA_CHECK</span>(<span class="built_in">cudaStreamGetPriority</span>(<span class="built_in">stream</span>(), &amp;priority));</span><br><span class="line">    <span class="keyword">return</span> priority;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="当前设备管理"><a href="#当前设备管理" class="headerlink" title="当前设备管理"></a>当前设备管理</h3><p><a href="c10/cuda/CUDAFunctions.cpp#L107-L141">c10&#x2F;cuda&#x2F;CUDAFunctions.cpp:107-141</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DeviceIndex <span class="title">current_device</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  DeviceIndex cur_device = <span class="number">-1</span>;</span><br><span class="line">  <span class="built_in">C10_CUDA_CHECK</span>(c10::cuda::<span class="built_in">GetDevice</span>(&amp;cur_device));</span><br><span class="line">  <span class="keyword">return</span> cur_device;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">set_device</span><span class="params">(DeviceIndex device, <span class="type">const</span> <span class="type">bool</span> force)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">C10_CUDA_CHECK</span>(c10::cuda::<span class="built_in">SetDevice</span>(device, force));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>多 GPU 时必须确保操作的数据和核函数在同一设备上。</p>
+<hr>
+<h2 id="同步操作的成本"><a href="#同步操作的成本" class="headerlink" title="同步操作的成本"></a>同步操作的成本</h2><h3 id="隐式同步点"><a href="#隐式同步点" class="headerlink" title="隐式同步点"></a>隐式同步点</h3><p>以下 PyTorch 操作会触发隐式同步：</p>
+<p><a href="c10/cuda/CUDAFunctions.h#L78-L108">c10&#x2F;cuda&#x2F;CUDAFunctions.h:78-108</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> __inline__ <span class="title">memcpy_and_sync</span><span class="params">(...)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">C10_CUDA_CHECK</span>(<span class="built_in">cudaMemcpyAsync</span>(dst, src, nbytes, kind, stream));</span><br><span class="line">  <span class="built_in">C10_CUDA_CHECK</span>(<span class="built_in">cudaStreamSynchronize</span>(stream));  <span class="comment">// 强制同步！</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这些操作会强制 CPU 等待 GPU 完成队列中所有任务：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>同步原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>tensor.item()</code></td>
+<td>需要把 GPU 数值传回 CPU</td>
+</tr>
+<tr>
+<td><code>torch.nonzero(tensor)</code></td>
+<td>结果大小取决于计算结果</td>
+</tr>
+<tr>
+<td><code>print(tensor)</code></td>
+<td>需要将数据格式化输出</td>
+</tr>
+</tbody></table>
+<h3 id="为什么昂贵？"><a href="#为什么昂贵？" class="headerlink" title="为什么昂贵？"></a>为什么昂贵？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GPU 工作队列: [op1] [op2] [op3] [sync]</span><br><span class="line">                                 ↑ 如果这里触发同步，前面的 op1、op2、op3 都得完成</span><br></pre></td></tr></table></figure>
+
+<p><strong>在高性能代码中，要极力避免不必要的同步</strong>。</p>
+<hr>
+<h2 id="PyTorch-的错误处理哲学"><a href="#PyTorch-的错误处理哲学" class="headerlink" title="PyTorch 的错误处理哲学"></a>PyTorch 的错误处理哲学</h2><h3 id="边界检查"><a href="#边界检查" class="headerlink" title="边界检查"></a>边界检查</h3><p>对于 Embedding 等操作，PyTorch 进行边界检查：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">embedding = nn.Embedding(<span class="number">100</span>, <span class="number">128</span>)</span><br><span class="line">embedding(<span class="built_in">input</span>)  <span class="comment"># 如果 input 超范围，立即报错</span></span><br></pre></td></tr></table></figure>
+
+<p>而不是让 GPU 执行一个”非法内存访问”，产生模糊错误。</p>
+<h3 id="为什么这样做？"><a href="#为什么这样做？" class="headerlink" title="为什么这样做？"></a>为什么这样做？</h3><table>
+<thead>
+<tr>
+<th>选择</th>
+<th>性能</th>
+<th>调试体验</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>省去边界检查</td>
+<td>稍好</td>
+<td>遇到问题时很难定位</td>
+</tr>
+<tr>
+<td><strong>保留边界检查</strong></td>
+<td><strong>略有损失</strong></td>
+<td><strong>得到清晰的错误报告</strong></td>
+</tr>
+</tbody></table>
+<p>PyTorch 选择<strong>错误报告优先</strong>，即使牺牲少量性能。</p>
+<hr>
+<h2 id="实践建议"><a href="#实践建议" class="headerlink" title="实践建议"></a>实践建议</h2><h3 id="1-识别同步操作"><a href="#1-识别同步操作" class="headerlink" title="1. 识别同步操作"></a>1. 识别同步操作</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bad: 在循环中频繁同步</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1000</span>):</span><br><span class="line">    value = tensor.item()  <span class="comment"># 每次都同步！</span></span><br><span class="line">    process(value)</span><br><span class="line"></span><br><span class="line"><span class="comment"># good: 先收集，再处理</span></span><br><span class="line">values = tensor.tolist()  <span class="comment"># 一次同步</span></span><br><span class="line"><span class="keyword">for</span> value <span class="keyword">in</span> values:</span><br><span class="line">    process(value)</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-异步调试"><a href="#2-异步调试" class="headerlink" title="2. 异步调试"></a>2. 异步调试</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 调试 CUDA 错误</span></span><br><span class="line">CUDA_LAUNCH_BLOCKING=1 python script.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># 额外信息</span></span><br><span class="line">CUDA_LAUNCH_BLOCKING=1 CUDA_MODULE_Debug=1 python script.py</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-多-GPU-显式管理"><a href="#3-多-GPU-显式管理" class="headerlink" title="3. 多 GPU 显式管理"></a>3. 多 GPU 显式管理</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 切换设备</span></span><br><span class="line">torch.cuda.set_device(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 或使用 device guard</span></span><br><span class="line"><span class="keyword">with</span> torch.cuda.device(<span class="number">1</span>):</span><br><span class="line">    result = model(<span class="built_in">input</span>)  <span class="comment"># 在 device 1 上执行</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>理解 CUDA 异步执行的关键点：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>异步执行</strong></td>
+<td>CPU 发起命令后立即返回，GPU 在后台执行</td>
+</tr>
+<tr>
+<td><strong>同步成本高</strong></td>
+<td><code>tensor.item()</code>、<code>print()</code> 等操作强制等待</td>
+</tr>
+<tr>
+<td><strong>调试用 CUDA_LAUNCH_BLOCKING</strong></td>
+<td>强制同步，精确定位错误</td>
+</tr>
+<tr>
+<td><strong>Streams 保证顺序</strong></td>
+<td>同一 Stream 内按顺序执行</td>
+</tr>
+<tr>
+<td><strong>错误报告优先</strong></td>
+<td>PyTorch 宁可牺牲少量性能，也要清晰的错误信息</td>
+</tr>
+</tbody></table>
+<p>当你和 GPU 打交道时，记住：<strong>发出的命令不会立即完成</strong>。这个认知将帮助你更好地理解性能瓶颈、调试诡异错误。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_6.pytorch-cuda-intro/">http://example.com/2026/05/24/publish_6.pytorch-cuda-intro/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_4.pytorch-cpu-vectorization/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch cpu vectorization
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch structured kernel meta tensor
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

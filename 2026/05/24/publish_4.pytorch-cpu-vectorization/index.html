@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch cpu vectorization | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch CPU 向量化：Vec256 与运行时动态分发引言：为什么需要向量化？在深度学习中，我们处理的不是单个数字，而是庞大的张量。如果 CPU 一次只能处理一个数字，效率会非常低下。 向量化（Vectorization）利用 SIMD（Single Instruction, Multiple Data）并行计算模式，让 CPU 用一条指令同时对多个数据进行操作。 1234567&#x2F;&#x2F; 标量">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch cpu vectorization">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_4.pytorch-cpu-vectorization/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch CPU 向量化：Vec256 与运行时动态分发引言：为什么需要向量化？在深度学习中，我们处理的不是单个数字，而是庞大的张量。如果 CPU 一次只能处理一个数字，效率会非常低下。 向量化（Vectorization）利用 SIMD（Single Instruction, Multiple Data）并行计算模式，让 CPU 用一条指令同时对多个数据进行操作。 1234567&#x2F;&#x2F; 标量">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.188Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch cpu vectorization
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%90%91%E9%87%8F%E5%8C%96%EF%BC%9F"><span class="toc-text">引言：为什么需要向量化？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Vec256%EF%BC%9A%E5%90%91%E9%87%8F%E5%8C%96%E6%8A%BD%E8%B1%A1"><span class="toc-text">Vec256：向量化抽象</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6"><span class="toc-text">核心文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%91%E9%87%8F%E5%8C%96%E5%BE%AA%E7%8E%AF%E7%A4%BA%E4%BE%8B"><span class="toc-text">向量化循环示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DispatchStub%EF%BC%9A%E8%BF%90%E8%A1%8C%E6%97%B6%E5%8A%A8%E6%80%81%E5%88%86%E5%8F%91"><span class="toc-text">DispatchStub：运行时动态分发</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98"><span class="toc-text">核心问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%BC%E5%AE%B9%E6%80%A7%E9%97%AE%E9%A2%98"><span class="toc-text">兼容性问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88%EF%BC%9A%E5%A4%9A%E6%AC%A1%E7%BC%96%E8%AF%91-%E8%BF%90%E8%A1%8C%E6%97%B6%E5%88%86%E5%8F%91"><span class="toc-text">解决方案：多次编译 + 运行时分发</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E6%9C%BA%E5%88%B6"><span class="toc-text">编译机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%8F%91%E7%94%9F%E5%9C%A8%E5%93%AA%E9%87%8C%EF%BC%9F"><span class="toc-text">编译发生在哪里？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E4%BB%A5%E5%8F%AA%E7%BC%96%E8%AF%91%E6%9C%AC%E5%9C%B0%E6%9C%80%E9%AB%98%E6%94%AF%E6%8C%81%E7%9A%84%E7%89%88%E6%9C%AC%E5%90%97%EF%BC%9F"><span class="toc-text">可以只编译本地最高支持的版本吗？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E9%80%89%E6%8B%A9"><span class="toc-text">运行时选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%BE%E7%A4%BA%EF%BC%9A%E5%90%91%E9%87%8F%E5%AE%BD%E5%BA%A6%E6%BC%94%E8%BF%9B"><span class="toc-text">图示：向量宽度演进</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX-512-%E7%9A%84%E6%9D%83%E8%A1%A1"><span class="toc-text">AVX-512 的权衡</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%90%91%E9%87%8F%E5%8C%96%EF%BC%9F"><span class="toc-text">引言：为什么需要向量化？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Vec256%EF%BC%9A%E5%90%91%E9%87%8F%E5%8C%96%E6%8A%BD%E8%B1%A1"><span class="toc-text">Vec256：向量化抽象</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%96%87%E4%BB%B6"><span class="toc-text">核心文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%91%E9%87%8F%E5%8C%96%E5%BE%AA%E7%8E%AF%E7%A4%BA%E4%BE%8B"><span class="toc-text">向量化循环示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DispatchStub%EF%BC%9A%E8%BF%90%E8%A1%8C%E6%97%B6%E5%8A%A8%E6%80%81%E5%88%86%E5%8F%91"><span class="toc-text">DispatchStub：运行时动态分发</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98"><span class="toc-text">核心问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%BC%E5%AE%B9%E6%80%A7%E9%97%AE%E9%A2%98"><span class="toc-text">兼容性问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88%EF%BC%9A%E5%A4%9A%E6%AC%A1%E7%BC%96%E8%AF%91-%E8%BF%90%E8%A1%8C%E6%97%B6%E5%88%86%E5%8F%91"><span class="toc-text">解决方案：多次编译 + 运行时分发</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E6%9C%BA%E5%88%B6"><span class="toc-text">编译机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%8F%91%E7%94%9F%E5%9C%A8%E5%93%AA%E9%87%8C%EF%BC%9F"><span class="toc-text">编译发生在哪里？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E4%BB%A5%E5%8F%AA%E7%BC%96%E8%AF%91%E6%9C%AC%E5%9C%B0%E6%9C%80%E9%AB%98%E6%94%AF%E6%8C%81%E7%9A%84%E7%89%88%E6%9C%AC%E5%90%97%EF%BC%9F"><span class="toc-text">可以只编译本地最高支持的版本吗？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E9%80%89%E6%8B%A9"><span class="toc-text">运行时选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%BE%E7%A4%BA%EF%BC%9A%E5%90%91%E9%87%8F%E5%AE%BD%E5%BA%A6%E6%BC%94%E8%BF%9B"><span class="toc-text">图示：向量宽度演进</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX-512-%E7%9A%84%E6%9D%83%E8%A1%A1"><span class="toc-text">AVX-512 的权衡</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-CPU-向量化：Vec256-与运行时动态分发"><a href="#PyTorch-CPU-向量化：Vec256-与运行时动态分发" class="headerlink" title="PyTorch CPU 向量化：Vec256 与运行时动态分发"></a>PyTorch CPU 向量化：Vec256 与运行时动态分发</h1><h2 id="引言：为什么需要向量化？"><a href="#引言：为什么需要向量化？" class="headerlink" title="引言：为什么需要向量化？"></a>引言：为什么需要向量化？</h2><p>在深度学习中，我们处理的不是单个数字，而是庞大的张量。如果 CPU 一次只能处理一个数字，效率会非常低下。</p>
+<p>向量化（Vectorization）利用 <strong>SIMD</strong>（Single Instruction, Multiple Data）并行计算模式，让 CPU 用一条指令同时对多个数据进行操作。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 标量：1000 次循环，1000 次加法</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">1000</span>; ++i) &#123;</span><br><span class="line">    c[i] = a[i] + b[i];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 向量（256位 AVX）：只需要 1000/8 ≈ 125 次循环</span></span><br><span class="line"><span class="comment">// 一次处理 8 个 32 位浮点数</span></span><br></pre></td></tr></table></figure>
+
+<p>PyTorch 采用<strong>手动向量化</strong>策略，通过 <code>Vec256</code> 等 C++ 抽象层编写向量化代码，并通过运行时动态分发机制在不同 CPU 上保证兼容性和性能。</p>
+<hr>
+<h2 id="Vec256：向量化抽象"><a href="#Vec256：向量化抽象" class="headerlink" title="Vec256：向量化抽象"></a>Vec256：向量化抽象</h2><h3 id="核心文件"><a href="#核心文件" class="headerlink" title="核心文件"></a>核心文件</h3><p><a href="aten/src/ATen/cpu/vec/vec256/vec256.h">aten&#x2F;src&#x2F;ATen&#x2F;cpu&#x2F;vec&#x2F;vec256&#x2F;vec256.h</a></p>
+<p>Vec256 封装了 256 位向量寄存器，重载了运算符，让开发者可以用接近标量代码的方式编写向量化代码：</p>
+<p><a href="aten/src/ATen/cpu/vec/vec256/vec256_float.h">aten&#x2F;src&#x2F;ATen&#x2F;cpu&#x2F;vec&#x2F;vec256&#x2F;vec256_float.h</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Vectorized</span>&lt;<span class="type">float</span>&gt; &#123;</span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  __m256 values;  <span class="comment">// 256位 AVX 寄存器，装入 8 个 float</span></span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">using</span> value_type = <span class="type">float</span>;</span><br><span class="line">  <span class="keyword">using</span> size_type = <span class="type">int</span>;</span><br><span class="line">  <span class="function"><span class="type">static</span> <span class="keyword">constexpr</span> size_type <span class="title">size</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> <span class="number">8</span>; &#125;  <span class="comment">// 8 floats = 256 bits</span></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">static</span> Vectorized&lt;<span class="type">float</span>&gt; <span class="title">loadu</span><span class="params">(<span class="type">const</span> <span class="type">float</span>* ptr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Vectorized</span>&lt;<span class="type">float</span>&gt;(_mm256_loadu_ps(ptr));</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">store</span><span class="params">(<span class="type">float</span>* ptr)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    _mm256_storeu_ps(ptr, values);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 重载运算符，看起来像标量代码</span></span><br><span class="line">  <span class="keyword">friend</span> Vectorized&lt;<span class="type">float</span>&gt; <span class="keyword">operator</span>+(<span class="type">const</span> Vectorized&amp; a, <span class="type">const</span> Vectorized&amp; b) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Vectorized</span>&lt;<span class="type">float</span>&gt;(_mm256_add_ps(a.values, b.values));</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="向量化循环示例"><a href="#向量化循环示例" class="headerlink" title="向量化循环示例"></a>向量化循环示例</h3><p><a href="aten/src/ATen/native/cpu/batch_norm_kernel.cpp">aten&#x2F;src&#x2F;ATen&#x2F;native&#x2F;cpu&#x2F;batch_norm_kernel.cpp</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">scalar_t</span>&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">batch_norm_cpu_contiguous_impl</span><span class="params">(...)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">using</span> Vec = Vectorized&lt;<span class="type">scalar_t</span>&gt;;</span><br><span class="line">  <span class="type">const</span> <span class="type">int64_t</span> loop_size = image_size - (image_size % Vec::<span class="built_in">size</span>());</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (...) &#123;</span><br><span class="line">    <span class="comment">// 加载 8 个 float 到向量寄存器</span></span><br><span class="line">    Vec data_vec = Vec::<span class="built_in">loadu</span>(input_data + offset + d);</span><br><span class="line">    <span class="comment">// 向量运算：一次完成 8 对数的乘法和加法</span></span><br><span class="line">    Vec output_vec = data_vec * alpha_vec + beta_vec;</span><br><span class="line">    <span class="comment">// 存储结果</span></span><br><span class="line">    output_vec.<span class="built_in">store</span>(output_data + offset + d);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="DispatchStub：运行时动态分发"><a href="#DispatchStub：运行时动态分发" class="headerlink" title="DispatchStub：运行时动态分发"></a>DispatchStub：运行时动态分发</h2><h3 id="核心问题"><a href="#核心问题" class="headerlink" title="核心问题"></a>核心问题</h3><p>先了解一下 CPU 向量指令集的演进：</p>
+<table>
+<thead>
+<tr>
+<th>指令集</th>
+<th>寄存器宽度</th>
+<th>每次操作 float 数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SSE</strong></td>
+<td>128 bits</td>
+<td>4 个</td>
+<td>早期版本</td>
+</tr>
+<tr>
+<td><strong>AVX</strong></td>
+<td>256 bits</td>
+<td>8 个</td>
+<td>扩展到 256 位</td>
+</tr>
+<tr>
+<td><strong>AVX2</strong></td>
+<td>256 bits</td>
+<td>8 个</td>
+<td>增加更多整数指令</td>
+</tr>
+<tr>
+<td><strong>AVX-512</strong></td>
+<td>512 bits</td>
+<td>16 个</td>
+<td>宽度翻倍，但有功耗问题</td>
+</tr>
+</tbody></table>
+<p>一个 2015 年的 CPU 可能只支持到 AVX2，而 2020 年后的高端 CPU 才支持 AVX-512。</p>
+<h3 id="兼容性问题"><a href="#兼容性问题" class="headerlink" title="兼容性问题"></a>兼容性问题</h3><p>如果 PyTorch 直接用 AVX2 编译，在不支持的 CPU 上会收到 <strong>SIGILL（非法指令）错误</strong>，程序直接崩溃。</p>
+<h3 id="解决方案：多次编译-运行时分发"><a href="#解决方案：多次编译-运行时分发" class="headerlink" title="解决方案：多次编译 + 运行时分发"></a>解决方案：多次编译 + 运行时分发</h3><p>DispatchStub 的工作原理：</p>
+<p><a href="aten/src/ATen/native/DispatchStub.h">aten&#x2F;src&#x2F;ATen&#x2F;native&#x2F;DispatchStub.h</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum class</span> <span class="title class_">CPUCapability</span> &#123;</span><br><span class="line">  DEFAULT = <span class="number">0</span>,</span><br><span class="line">  AVX2 = <span class="number">1</span>,</span><br><span class="line">  AVX512 = <span class="number">2</span>,</span><br><span class="line">  VSX = <span class="number">1</span>,       <span class="comment">// IBM Power</span></span><br><span class="line">  ZVECTOR = <span class="number">1</span>,    <span class="comment">// IBM Z</span></span><br><span class="line">  SVE256 = <span class="number">1</span>,     <span class="comment">// ARM SVE</span></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>注册宏：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> DECLARE_DISPATCH(fn, name)         <span class="comment">// 声明 dispatch stub</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> DEFINE_DISPATCH(name)              <span class="comment">// 定义 stub</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> REGISTER_DISPATCH(name, fn)        <span class="comment">// 注册当前 CPU 对应的内核</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> REGISTER_AVX2_DISPATCH(name, fn)    <span class="comment">// 注册 AVX2 版本</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> REGISTER_AVX512_DISPATCH(name, fn)  <span class="comment">// 注册 AVX512 版本</span></span></span><br></pre></td></tr></table></figure>
+
+<h3 id="编译机制"><a href="#编译机制" class="headerlink" title="编译机制"></a>编译机制</h3><p><a href="aten/src/ATen/cpu/vec/vec256/vec256.h">aten&#x2F;src&#x2F;ATen&#x2F;cpu&#x2F;vec&#x2F;vec256&#x2F;vec256.h</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">inline</span> <span class="keyword">namespace</span> CPU_CAPABILITY &#123;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">if</span> defined(CPU_CAPABILITY_AVX2)</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ATen/cpu/vec/vec256/vec256_float.h&gt;</span>  <span class="comment">// AVX2 实现</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ATen/cpu/vec/vec256/vec256_double.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">elif</span> defined(CPU_CAPABILITY_AVX512)</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ATen/cpu/vec/vec256/vec256_float.h&gt;</span>  <span class="comment">// AVX512 实现</span></span></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line"><span class="meta">#<span class="keyword">elif</span> defined(CPU_CAPABILITY_VSX)</span></span><br><span class="line"><span class="comment">// IBM VSX 实现</span></span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line"><span class="comment">// 默认标量实现</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>同一个源文件会被编译多次，每次使用不同的编译器标志（如 <code>-mavx2</code>），生成不同版本的函数，通过不同的 inline namespace 区分。</p>
+<h3 id="编译发生在哪里？"><a href="#编译发生在哪里？" class="headerlink" title="编译发生在哪里？"></a>编译发生在哪里？</h3><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>多次编译发生在哪里</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>本地从源码编译</strong></td>
+<td><strong>在你本地机器上</strong>，CMake 会配置多次编译，生成多个 <code>.o</code> 文件</td>
+</tr>
+<tr>
+<td><strong>官方 pip wheel</strong></td>
+<td>通常只在 Meta 的构建服务器上编译一次（通用 AVX2 版本）</td>
+</tr>
+</tbody></table>
+<h3 id="可以只编译本地最高支持的版本吗？"><a href="#可以只编译本地最高支持的版本吗？" class="headerlink" title="可以只编译本地最高支持的版本吗？"></a>可以只编译本地最高支持的版本吗？</h3><p><strong>答案是：默认不会，但可以控制。</strong></p>
+<p>PyTorch 的设计哲学是<strong>同时编译所有检测到的版本</strong>，运行时再选择。这样做的好处是：</p>
+<ul>
+<li>二进制可以在不同 CPU 上运行（兼容性）</li>
+<li>运行时动态选择最优版本（性能）</li>
+</ul>
+<p>如果你想<strong>只编译本地最高版本</strong>，有两个思路：</p>
+<p><strong>思路一：使用 <code>USE_NATIVE_ARCH</code></strong></p>
+<p><a href="CMakeLists.txt#L275">CMakeLists.txt:275</a></p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">option</span>(USE_NATIVE_ARCH <span class="string">&quot;Use -march=native&quot;</span> <span class="keyword">OFF</span>)</span><br></pre></td></tr></table></figure>
+
+<p>开启后，编译器会用本地 CPU 的最高指令集优化，但这<strong>不会阻止编译其他版本</strong>——PyTorch 仍然会编译 AVX2、AVX512 等版本，只是在当前机器上用 <code>march=native</code> 优化。</p>
+<p><strong>思路二：环境变量控制（运行时）</strong></p>
+<p>如果你只想在本地 AVX-512 CPU 上获得最佳性能，不需要从源码重新编译，直接设置环境变量：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 运行时分发到 AVX512 版本</span></span><br><span class="line">ATEN_CPU_CAPABILITY=avx512 python -c <span class="string">&quot;import torch&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>这样虽然二进制里同时有 AVX2 和 AVX512 代码，但运行时会强制使用 AVX512。</p>
+<p><strong>如果真的只想编译 AVX512 一个版本</strong>：需要修改 CMake 源码，禁用其他 capability 的编译——这并不是官方支持的场景。</p>
+<h3 id="运行时选择"><a href="#运行时选择" class="headerlink" title="运行时选择"></a>运行时选择</h3><p><a href="aten/src/ATen/native/DispatchStub.cpp">aten&#x2F;src&#x2F;ATen&#x2F;native&#x2F;DispatchStub.cpp</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> CPUCapability <span class="title">compute_cpu_capability</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 环境变量覆盖</span></span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span> envar = c10::utils::<span class="built_in">get_env</span>(<span class="string">&quot;ATEN_CPU_CAPABILITY&quot;</span>);</span><br><span class="line">  <span class="keyword">if</span> (envar.<span class="built_in">has_value</span>()) &#123;</span><br><span class="line">    <span class="keyword">if</span> (envar == <span class="string">&quot;avx512&quot;</span>) <span class="keyword">return</span> CPUCapability::AVX512;</span><br><span class="line">    <span class="keyword">if</span> (envar == <span class="string">&quot;avx2&quot;</span>) <span class="keyword">return</span> CPUCapability::AVX2;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 使用 cpuinfo 库检测 CPU 特性</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">cpuinfo_initialize</span>()) &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">cpuinfo_has_x86_avx512vl</span>() &amp;&amp; <span class="built_in">cpuinfo_has_x86_avx512bw</span>() &amp;&amp;</span><br><span class="line">        <span class="built_in">cpuinfo_has_x86_avx512dq</span>() &amp;&amp; <span class="built_in">cpuinfo_has_x86_fma3</span>()) &#123;</span><br><span class="line">      <span class="keyword">return</span> CPUCapability::AVX512;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">cpuinfo_has_x86_avx2</span>() &amp;&amp; <span class="built_in">cpuinfo_has_x86_fma3</span>()) &#123;</span><br><span class="line">      <span class="keyword">return</span> CPUCapability::AVX2;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> CPUCapability::DEFAULT;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>分发逻辑：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> DispatchResult <span class="title">try_choose_cpu_impl</span><span class="params">(CPUCapability capability)</span> </span>&#123;</span><br><span class="line">  <span class="meta">#<span class="keyword">ifdef</span> HAVE_AVX512_CPU_DEFINITION</span></span><br><span class="line">  <span class="keyword">if</span> (capability &gt;= <span class="built_in">static_cast</span>&lt;<span class="type">int</span>&gt;(CPUCapability::AVX512)) &#123;</span><br><span class="line">    <span class="keyword">return</span> AVX512 != <span class="literal">nullptr</span> ? <span class="built_in">DispatchResult</span>(AVX512) : <span class="built_in">DispatchResult</span>(AVX2);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  <span class="meta">#<span class="keyword">ifdef</span> HAVE_AVX2_CPU_DEFINITION</span></span><br><span class="line">  <span class="keyword">if</span> (capability &gt;= <span class="built_in">static_cast</span>&lt;<span class="type">int</span>&gt;(CPUCapability::AVX2)) &#123;</span><br><span class="line">    <span class="keyword">return</span> AVX2 != <span class="literal">nullptr</span> ? <span class="built_in">DispatchResult</span>(AVX2) : <span class="built_in">DispatchResult</span>(DEFAULT);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">DispatchResult</span>(DEFAULT);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="图示：向量宽度演进"><a href="#图示：向量宽度演进" class="headerlink" title="图示：向量宽度演进"></a>图示：向量宽度演进</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">SSE:     ────────────────  128 bits =  4 个 float</span><br><span class="line">AVX:     ────────────────  256 bits =  8 个 float</span><br><span class="line">AVX2:    ────────────────  256 bits =  8 个 float（更多整数指令）</span><br><span class="line">AVX-512: ────────────────  512 bits = 16 个 float</span><br></pre></td></tr></table></figure>
+
+<p>Vec256 对应 AVX 的 256 位宽度，<code>Vectorized&lt;float&gt;::size()</code> 返回 8。</p>
+<hr>
+<h2 id="AVX-512-的权衡"><a href="#AVX-512-的权衡" class="headerlink" title="AVX-512 的权衡"></a>AVX-512 的权衡</h2><p>你可能会问：既然 AVX-512 一次能处理 16 个 float，为什么 PyTorch 不全面拥抱它？</p>
+<p><strong>降频（Down-clocking）问题</strong>：在某些 Intel CPU 上，执行高功耗的 AVX-512 指令时，CPU 会自动降低核心时钟频率。如果程序在 AVX-512 和普通代码之间频繁切换，降频带来的性能损失可能抵消 AVX-512 的加速收益。</p>
+<p>因此 PyTorch 社区对全面集成 AVX-512 持谨慎态度。</p>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>PyTorch CPU 向量化系统：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>文件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Vec256</strong></td>
+<td><code>aten/src/ATen/cpu/vec/vec256/</code></td>
+<td>向量化抽象，重载运算符</td>
+</tr>
+<tr>
+<td><strong>DispatchStub</strong></td>
+<td><code>aten/src/ATen/native/DispatchStub.h</code></td>
+<td>运行时内核分发</td>
+</tr>
+<tr>
+<td><strong>cpuinfo</strong></td>
+<td>运行时检测</td>
+<td>识别 CPU 特性</td>
+</tr>
+<tr>
+<td><strong>多次编译</strong></td>
+<td>不同 <code>-mavx*</code> 标志</td>
+<td>生成不同指令集版本</td>
+</tr>
+</tbody></table>
+<p>这套机制让 PyTorch 能在各种 CPU 上既保证兼容性，又最大化利用硬件的向量化能力。向量化不是”黑魔法”，而是一套精心设计的工程方案。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_4.pytorch-cpu-vectorization/">http://example.com/2026/05/24/publish_4.pytorch-cpu-vectorization/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_1.pytorch-tensor-binding/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch tensor binding
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_6.pytorch-cuda-intro/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch cuda intro
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>

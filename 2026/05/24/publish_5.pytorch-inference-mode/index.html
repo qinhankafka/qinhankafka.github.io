@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+
+    
+
+    <!-- 渲染优化 -->
+    <meta name="renderer" content="webkit">
+    <meta name="force-rendering" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" >
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <!--icon-->
+
+    
+        <link rel="shortcut icon" href="/favicon/favicon.ico">
+    
+    
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    
+    
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    
+    
+        <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    
+    
+        <link rel="mask-icon" href="/favicon/safari-pinned-tab.svg">
+    
+
+
+    <!-- meta -->
+
+
+<title>pytorch inference mode | 此间闲笔</title>
+
+
+    <meta name="keywords" content="pytorch, PyTorch源码分析">
+
+
+
+
+    <!-- OpenGraph -->
+ 
+    <meta name="description" content="PyTorch 推理模式（Inference Mode）深度解析引言：为什么需要推理模式？torch.no_grad() 已经能禁用梯度计算，为什么还需要 torch.inference_mode()？ 答案是：即使在 no_grad() 模式下，PyTorch 仍然在后台执行两项无法关闭的额外工作。这些工作是为自动求导准备的，但在纯推理场景下完全多余。 推理模式通过与用户达成”这些张量永远不会用">
+<meta property="og:type" content="article">
+<meta property="og:title" content="pytorch inference mode">
+<meta property="og:url" content="http://example.com/2026/05/24/publish_5.pytorch-inference-mode/index.html">
+<meta property="og:site_name" content="此间闲笔">
+<meta property="og:description" content="PyTorch 推理模式（Inference Mode）深度解析引言：为什么需要推理模式？torch.no_grad() 已经能禁用梯度计算，为什么还需要 torch.inference_mode()？ 答案是：即使在 no_grad() 模式下，PyTorch 仍然在后台执行两项无法关闭的额外工作。这些工作是为自动求导准备的，但在纯推理场景下完全多余。 推理模式通过与用户达成”这些张量永远不会用">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
+<meta property="article:modified_time" content="2026-05-24T08:28:01.192Z">
+<meta property="article:author" content="hans">
+<meta property="article:tag" content="pytorch">
+<meta property="article:tag" content="PyTorch源码分析">
+<meta name="twitter:card" content="summary_large_image">
+
+
+    
+<link rel="stylesheet" href="/css/style/main.css">
+ 
+
+    
+    
+        <link rel="stylesheet" id="hl-default-theme" href="/css/highlight/default.css" media="none" >
+        
+            <link rel="stylesheet" id="hl-dark-theme" href="/css/highlight/dark.css" media="none">
+        
+    
+
+    
+    
+
+    
+    
+<link rel="stylesheet" href="/css/style/dark.css">
+
+    
+<script src="/js/darkmode.js"></script>
+
+
+
+     
+
+    <!-- custom head -->
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+    <body>
+        <div id="app" tabindex="-1">
+            <header class="header">
+    <div class="header__left">
+        <a href="/" class="button">
+            <span class="logo__text">hans</span>
+        </a>
+    </div>
+    <div class="header__right">
+        
+            <div class="navbar__menus">
+                
+                    <a href="/" class="navbar-menu button">首页</a>
+                
+                    <a href="/tags/" class="navbar-menu button">标签</a>
+                
+                    <a href="/archives/" class="navbar-menu button">归档</a>
+                
+                    <a href="/friends/" class="navbar-menu button">友链</a>
+                
+                    <a href="/page/" class="navbar-menu button">Page</a>
+                
+            </div>
+        
+        
+        
+    <a href="/search/" id="btn-search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="32"><path d="M192 448c0-141.152 114.848-256 256-256s256 114.848 256 256-114.848 256-256 256-256-114.848-256-256z m710.624 409.376l-206.88-206.88A318.784 318.784 0 0 0 768 448c0-176.736-143.264-320-320-320S128 271.264 128 448s143.264 320 320 320a318.784 318.784 0 0 0 202.496-72.256l206.88 206.88 45.248-45.248z"></path></svg>
+    </a>
+
+
+        
+        
+    <a href="javaScript:void(0);" id="btn-toggle-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </a>
+
+
+        
+            <a class="dropdown-icon button" id="btn-dropdown" tabindex="0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width='24' height='24' fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"><path fill="currentColor" d="M3.314,4.8h13.372c0.41,0,0.743-0.333,0.743-0.743c0-0.41-0.333-0.743-0.743-0.743H3.314c-0.41,0-0.743,0.333-0.743,0.743C2.571,4.467,2.904,4.8,3.314,4.8z M16.686,15.2H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,15.2,16.686,15.2z M16.686,9.257H3.314c-0.41,0-0.743,0.333-0.743,0.743s0.333,0.743,0.743,0.743h13.372c0.41,0,0.743-0.333,0.743-0.743S17.096,9.257,16.686,9.257z"></path></svg></a>
+            <div class="dropdown-menus" id="dropdown-menus">
+                
+                    <a href="/" class="dropdown-menu button">首页</a>
+                
+                    <a href="/tags/" class="dropdown-menu button">标签</a>
+                
+                    <a href="/archives/" class="dropdown-menu button">归档</a>
+                
+                    <a href="/friends/" class="dropdown-menu button">友链</a>
+                
+                    <a href="/page/" class="dropdown-menu button">Page</a>
+                
+            </div>
+        
+    </div>
+</header>
+
+
+            <main class="main">
+    
+
+<div class="post-title">
+    <h1 class="post-title__text">
+        pytorch inference mode
+    </h1>
+    <div class="post-title__meta">
+        <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
+        
+ 
+        
+    
+    
+
+
+ 
+
+ 
+    </div>
+</div>
+
+
+    <aside class="post-side">
+        <div class="post-side__toc">
+            <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E6%8E%A8%E7%90%86%E6%A8%A1%E5%BC%8F%EF%BC%9F"><span class="toc-text">引言：为什么需要推理模式？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9A%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E5%AE%89%E5%85%A8%E7%BD%91"><span class="toc-text">版本计数器：自动求导的安全网</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9F"><span class="toc-text">为什么需要版本计数器？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9A%E6%A3%80%E6%B5%8B%E2%80%9D%E4%B8%AD%E9%97%B4%E7%8A%B6%E6%80%81%E8%A2%AB%E7%A0%B4%E5%9D%8F%E2%80%9D"><span class="toc-text">版本计数器：检测”中间状态被破坏”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E5%85%B7%E4%BD%93%E5%9C%BA%E6%99%AF"><span class="toc-text">一个具体场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">版本计数器的工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E5%8F%B7%E5%85%B1%E4%BA%AB%EF%BC%9A%E8%A7%86%E5%9B%BE%E7%9A%84%E7%89%B9%E6%AE%8A%E6%80%A7"><span class="toc-text">版本号共享：视图的特殊性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E7%9A%84%E5%BC%80%E9%94%80"><span class="toc-text">版本计数器的开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E4%B8%8D%E8%83%BD%E9%98%B2%E6%AD%A2%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">版本计数器不能防止什么？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E7%90%86%E6%A8%A1%E5%BC%8F%E7%9A%84%E6%A0%B8%E5%BF%83%E5%AE%9E%E7%8E%B0"><span class="toc-text">推理模式的核心实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E7%9A%84%E6%A0%B8%E5%BF%83%EF%BC%9AADInplaceOrView"><span class="toc-text">DispatchKey 的核心：ADInplaceOrView</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%99%E4%B8%AA-key-%E5%9C%A8%E5%93%AA%E9%87%8C%E6%B3%A8%E5%86%8C%EF%BC%9F"><span class="toc-text">这个 key 在哪里注册？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E6%A3%80%E6%9F%A5%E4%B8%80%E4%B8%AA%E5%BC%A0%E9%87%8F%E6%98%AF%E5%90%A6%E6%98%AF%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F"><span class="toc-text">如何检查一个张量是否是推理张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E4%BC%98%E5%85%88%E7%BA%A7%E4%BD%93%E7%B3%BB"><span class="toc-text">DispatchKey 优先级体系</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Dispatch-%E6%9F%A5%E6%89%BE%E6%B5%81%E7%A8%8B"><span class="toc-text">Dispatch 查找流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fallthrough-%E6%9C%BA%E5%88%B6"><span class="toc-text">Fallthrough 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-InferenceMode-%E8%A6%81%E7%A7%BB%E9%99%A4-ADInplaceOrView%EF%BC%9F"><span class="toc-text">为什么 InferenceMode 要移除 ADInplaceOrView？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#InferenceMode-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">InferenceMode 的工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F%E7%9A%84%E4%B8%A4%E4%B8%AA%E5%85%B3%E9%94%AE%E7%89%B9%E6%80%A7"><span class="toc-text">推理张量的两个关键特性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9%E6%AF%94%EF%BC%9A%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F-vs-%E6%99%AE%E9%80%9A%E5%BC%A0%E9%87%8F"><span class="toc-text">对比：推理张量 vs 普通张量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E8%BF%BD%E8%B8%AA%EF%BC%9A%E2%80%9D%E6%A2%AF%E5%BA%A6%E6%84%9F%E6%9F%93%E2%80%9D%E9%97%AE%E9%A2%98"><span class="toc-text">视图追踪：”梯度感染”问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E8%BF%BD%E8%B8%AA%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">视图追踪的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CreationMeta-%E6%9C%BA%E5%88%B6"><span class="toc-text">CreationMeta 机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%EF%BC%9A%E4%B8%A4%E5%B1%82%E4%BF%9D%E6%8A%A4"><span class="toc-text">安全检查：两层保护</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E5%B1%82%EF%BC%9A%E7%A6%81%E6%AD%A2%E4%BF%9D%E5%AD%98%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F"><span class="toc-text">第一层：禁止保存推理张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E5%B1%82%EF%BC%9A%E7%A6%81%E6%AD%A2%E8%B7%A8%E6%A8%A1%E5%BC%8F%E5%8E%9F%E5%9C%B0%E4%BF%AE%E6%94%B9"><span class="toc-text">第二层：禁止跨模式原地修改</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E7%A4%BA%E4%BE%8B"><span class="toc-text">错误示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Python-API"><span class="toc-text">Python API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+        </div>
+    </aside>
+    <a class="btn-toc button" id="btn-toc" tabindex="0">
+        <svg viewBox="0 0 1024 1024" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 256h64V192H128zM320 256h576V192H320zM128 544h64v-64H128zM320 544h576v-64H320zM128 832h64v-64H128zM320 832h576v-64H320z" fill="currentColor"></path>
+        </svg>
+    </a>
+    <div class="toc-menus" id="toc-menus">
+        <div class="toc-title">文章目录</div>
+        <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E6%8E%A8%E7%90%86%E6%A8%A1%E5%BC%8F%EF%BC%9F"><span class="toc-text">引言：为什么需要推理模式？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9A%E8%87%AA%E5%8A%A8%E6%B1%82%E5%AF%BC%E7%9A%84%E5%AE%89%E5%85%A8%E7%BD%91"><span class="toc-text">版本计数器：自动求导的安全网</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9F"><span class="toc-text">为什么需要版本计数器？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%EF%BC%9A%E6%A3%80%E6%B5%8B%E2%80%9D%E4%B8%AD%E9%97%B4%E7%8A%B6%E6%80%81%E8%A2%AB%E7%A0%B4%E5%9D%8F%E2%80%9D"><span class="toc-text">版本计数器：检测”中间状态被破坏”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E5%85%B7%E4%BD%93%E5%9C%BA%E6%99%AF"><span class="toc-text">一个具体场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">版本计数器的工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E5%8F%B7%E5%85%B1%E4%BA%AB%EF%BC%9A%E8%A7%86%E5%9B%BE%E7%9A%84%E7%89%B9%E6%AE%8A%E6%80%A7"><span class="toc-text">版本号共享：视图的特殊性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E7%9A%84%E5%BC%80%E9%94%80"><span class="toc-text">版本计数器的开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E8%AE%A1%E6%95%B0%E5%99%A8%E4%B8%8D%E8%83%BD%E9%98%B2%E6%AD%A2%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-text">版本计数器不能防止什么？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E7%90%86%E6%A8%A1%E5%BC%8F%E7%9A%84%E6%A0%B8%E5%BF%83%E5%AE%9E%E7%8E%B0"><span class="toc-text">推理模式的核心实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E7%9A%84%E6%A0%B8%E5%BF%83%EF%BC%9AADInplaceOrView"><span class="toc-text">DispatchKey 的核心：ADInplaceOrView</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%99%E4%B8%AA-key-%E5%9C%A8%E5%93%AA%E9%87%8C%E6%B3%A8%E5%86%8C%EF%BC%9F"><span class="toc-text">这个 key 在哪里注册？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E6%A3%80%E6%9F%A5%E4%B8%80%E4%B8%AA%E5%BC%A0%E9%87%8F%E6%98%AF%E5%90%A6%E6%98%AF%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F"><span class="toc-text">如何检查一个张量是否是推理张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DispatchKey-%E4%BC%98%E5%85%88%E7%BA%A7%E4%BD%93%E7%B3%BB"><span class="toc-text">DispatchKey 优先级体系</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Dispatch-%E6%9F%A5%E6%89%BE%E6%B5%81%E7%A8%8B"><span class="toc-text">Dispatch 查找流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fallthrough-%E6%9C%BA%E5%88%B6"><span class="toc-text">Fallthrough 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-InferenceMode-%E8%A6%81%E7%A7%BB%E9%99%A4-ADInplaceOrView%EF%BC%9F"><span class="toc-text">为什么 InferenceMode 要移除 ADInplaceOrView？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#InferenceMode-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">InferenceMode 的工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F%E7%9A%84%E4%B8%A4%E4%B8%AA%E5%85%B3%E9%94%AE%E7%89%B9%E6%80%A7"><span class="toc-text">推理张量的两个关键特性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9%E6%AF%94%EF%BC%9A%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F-vs-%E6%99%AE%E9%80%9A%E5%BC%A0%E9%87%8F"><span class="toc-text">对比：推理张量 vs 普通张量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E8%BF%BD%E8%B8%AA%EF%BC%9A%E2%80%9D%E6%A2%AF%E5%BA%A6%E6%84%9F%E6%9F%93%E2%80%9D%E9%97%AE%E9%A2%98"><span class="toc-text">视图追踪：”梯度感染”问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE%E8%BF%BD%E8%B8%AA%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">视图追踪的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CreationMeta-%E6%9C%BA%E5%88%B6"><span class="toc-text">CreationMeta 机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%EF%BC%9A%E4%B8%A4%E5%B1%82%E4%BF%9D%E6%8A%A4"><span class="toc-text">安全检查：两层保护</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E5%B1%82%EF%BC%9A%E7%A6%81%E6%AD%A2%E4%BF%9D%E5%AD%98%E6%8E%A8%E7%90%86%E5%BC%A0%E9%87%8F"><span class="toc-text">第一层：禁止保存推理张量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E5%B1%82%EF%BC%9A%E7%A6%81%E6%AD%A2%E8%B7%A8%E6%A8%A1%E5%BC%8F%E5%8E%9F%E5%9C%B0%E4%BF%AE%E6%94%B9"><span class="toc-text">第二层：禁止跨模式原地修改</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E7%A4%BA%E4%BE%8B"><span class="toc-text">错误示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Python-API"><span class="toc-text">Python API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+
+<article class="post post__with-toc content-card">
+    <div class="post__header"></div>
+    <div class="post__content">
+        <h1 id="PyTorch-推理模式（Inference-Mode）深度解析"><a href="#PyTorch-推理模式（Inference-Mode）深度解析" class="headerlink" title="PyTorch 推理模式（Inference Mode）深度解析"></a>PyTorch 推理模式（Inference Mode）深度解析</h1><h2 id="引言：为什么需要推理模式？"><a href="#引言：为什么需要推理模式？" class="headerlink" title="引言：为什么需要推理模式？"></a>引言：为什么需要推理模式？</h2><p><code>torch.no_grad()</code> 已经能禁用梯度计算，为什么还需要 <code>torch.inference_mode()</code>？</p>
+<p>答案是：即使在 <code>no_grad()</code> 模式下，PyTorch 仍然在后台执行两项无法关闭的额外工作。这些工作是为自动求导准备的，但在纯推理场景下完全多余。</p>
+<p>推理模式通过与用户达成”这些张量永远不会用于求导”的约定，大胆地跳过这些开销，同时建立严格的安全检查机制。</p>
+<hr>
+<h2 id="版本计数器：自动求导的安全网"><a href="#版本计数器：自动求导的安全网" class="headerlink" title="版本计数器：自动求导的安全网"></a>版本计数器：自动求导的安全网</h2><h3 id="为什么需要版本计数器？"><a href="#为什么需要版本计数器？" class="headerlink" title="为什么需要版本计数器？"></a>为什么需要版本计数器？</h3><p>反向传播时，自动求导引擎需要用到前向传播时保存的张量原始值。如果在 <code>backward()</code> 调用前张量被原地修改，计算出的梯度就是错误的。</p>
+<p>为了检测这种”原地修改”，PyTorch 为每个张量关联了版本计数器：</p>
+<p><a href="c10/core/TensorImpl.h#L329-L350">c10&#x2F;core&#x2F;TensorImpl.h:329-350</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">C10_API</span> VariableVersion &#123;</span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">VersionCounter</span> : intrusive_ptr_target &#123;</span><br><span class="line">    <span class="built_in">VersionCounter</span>(<span class="type">uint32_t</span> version) : <span class="built_in">version_</span>(version) &#123;&#125;</span><br><span class="line">    std::atomic&lt;<span class="type">uint32_t</span>&gt; version_;  <span class="comment">// 原子计数器</span></span><br><span class="line">  &#125;;</span><br><span class="line">  c10::intrusive_ptr&lt;VersionCounter&gt; version_counter_;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">bump</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (version_counter_) &#123;</span><br><span class="line">      ++version_counter_-&gt;version_;  <span class="comment">// 原地修改时增加版本号</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h2 id="版本计数器：检测”中间状态被破坏”"><a href="#版本计数器：检测”中间状态被破坏”" class="headerlink" title="版本计数器：检测”中间状态被破坏”"></a>版本计数器：检测”中间状态被破坏”</h2><h3 id="一个具体场景"><a href="#一个具体场景" class="headerlink" title="一个具体场景"></a>一个具体场景</h3><p>为什么需要检测原地修改？考虑这个例子：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">a = torch.tensor([<span class="number">2.0</span>], requires_grad=<span class="literal">True</span>)</span><br><span class="line">b = a * a      <span class="comment"># 前向传播：PyTorch 保存了 a 的值用于反向传播</span></span><br><span class="line">               <span class="comment"># 此时 a 的版本号 = 0，保存了&quot;版本 0&quot;的 a</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 如果在 backward 之前原地修改了 a</span></span><br><span class="line">a.add_(<span class="number">1</span>)      <span class="comment"># a 变成了 [3.0]，版本号增加到 1</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 现在 backward</span></span><br><span class="line">b.backward()   <span class="comment"># 问题来了：PyTorch 应该用 2.0 还是 3.0 计算梯度？</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>正确的梯度</strong>：$b &#x3D; a^2$，$\frac{db}{da} &#x3D; 2a$，在 $a&#x3D;2$ 时，梯度应该是 $4$</p>
+<p><strong>如果用修改后的 a</strong>：在 $a&#x3D;3$ 时，梯度是 $6$，这是<strong>错误的答案</strong></p>
+<h3 id="版本计数器的工作原理"><a href="#版本计数器的工作原理" class="headerlink" title="版本计数器的工作原理"></a>版本计数器的工作原理</h3><p><a href="c10/core/TensorImpl.h#L288-L328">c10&#x2F;core&#x2F;TensorImpl.h:288-328</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NOTE [ Version Counter Sharing ]</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// Every Tensor has a version counter. Version counters are incremented whenever</span></span><br><span class="line"><span class="comment">// the data or size of a tensor changes through in-place Variable operations.</span></span><br><span class="line"><span class="comment">// Version counters are used to detect modifications to saved variables which</span></span><br><span class="line"><span class="comment">// would result in incorrect gradient calculations.</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>保存时记录版本</strong>：</p>
+<p><a href="torch/csrc/autograd/saved_variable.cpp#L40-L46">torch&#x2F;csrc&#x2F;autograd&#x2F;saved_variable.cpp:40-46</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 在 SavedVariable 构造函数中</span></span><br><span class="line">saved_version_ = variable._version();  <span class="comment">// 记录保存时的版本号</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>回传时校验版本</strong>：</p>
+<p><a href="torch/csrc/autograd/saved_variable.cpp#L165-L198">torch&#x2F;csrc&#x2F;autograd&#x2F;saved_variable.cpp:165-198</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 只有在没有 hooks 的情况下检查</span></span><br><span class="line"><span class="keyword">if</span> (!hooks_) &#123;</span><br><span class="line">  <span class="keyword">auto</span> current_version = impl::<span class="built_in">version_counter</span>(data_).<span class="built_in">current_version</span>();</span><br><span class="line">  <span class="keyword">if</span> (saved_version_ != current_version) &#123;</span><br><span class="line">    <span class="comment">// 版本不匹配 → 报错！</span></span><br><span class="line">    <span class="built_in">TORCH_CHECK</span>(<span class="literal">false</span>,</span><br><span class="line">        <span class="string">&quot;one of the variables needed for gradient computation has been &quot;</span></span><br><span class="line">        <span class="string">&quot;modified by an inplace operation&quot;</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="版本号共享：视图的特殊性"><a href="#版本号共享：视图的特殊性" class="headerlink" title="版本号共享：视图的特殊性"></a>版本号共享：视图的特殊性</h3><p><a href="c10/core/TensorImpl.h#L307-L328">c10&#x2F;core&#x2F;TensorImpl.h:307-328</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 为什么版本计数器放在 TensorImpl 而不是 AutogradMeta？</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// 因为一个 tensor 的 requires_grad=False 时，它没有 AutogradMeta。</span></span><br><span class="line"><span class="comment">// 但当它在前向传播中被保存用于反向传播时，我们需要追踪它的版本。</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// 如果放在 AutogradMeta，就需要在保存时才懒创建，这会在多线程场景下</span></span><br><span class="line"><span class="comment">// 产生竞态条件，破坏前向传播的线程安全性。</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// 所以版本计数器放在 TensorImpl 层，对所有张量可见。</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>视图共享版本计数器</strong>：视图和基张量共享同一个版本计数器。这样对基张量的原地修改也会被视图检测到。</p>
+<h3 id="版本计数器的开销"><a href="#版本计数器的开销" class="headerlink" title="版本计数器的开销"></a>版本计数器的开销</h3><table>
+<thead>
+<tr>
+<th>开销</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>内存</strong></td>
+<td>每个张量需要 <code>intrusive_ptr&lt;VersionCounter&gt;</code></td>
+</tr>
+<tr>
+<td><strong>计算</strong></td>
+<td>每次原地修改需要 <code>atomic::operator++</code>（原子操作，比普通 ++ 慢）</td>
+</tr>
+</tbody></table>
+<h3 id="版本计数器不能防止什么？"><a href="#版本计数器不能防止什么？" class="headerlink" title="版本计数器不能防止什么？"></a>版本计数器不能防止什么？</h3><ul>
+<li><code>set_data()</code> 不会增加版本号（故意设计，允许替换底层数据）</li>
+<li><code>x.data</code> 也不共享版本号</li>
+</ul>
+<p>这些操作会直接替换数据而非原地修改。</p>
+<hr>
+<h2 id="推理模式的核心实现"><a href="#推理模式的核心实现" class="headerlink" title="推理模式的核心实现"></a>推理模式的核心实现</h2><h3 id="DispatchKey-的核心：ADInplaceOrView"><a href="#DispatchKey-的核心：ADInplaceOrView" class="headerlink" title="DispatchKey 的核心：ADInplaceOrView"></a>DispatchKey 的核心：ADInplaceOrView</h3><p><code>ADInplaceOrView</code> 是 PyTorch 调度系统中的一个关键 key：</p>
+<p><a href="c10/core/DispatchKey.h#L269-L304">c10&#x2F;core&#x2F;DispatchKey.h:269-304</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Note [ADInplaceOrView key]</span></span><br><span class="line"><span class="comment">// ADInplaceOrView key is used by inplace or view ops to register a kernel</span></span><br><span class="line"><span class="comment">// that does additional setup for future autograd computation.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// 1. For inplace ops this kernel does version bump</span></span><br><span class="line"><span class="comment">// 2. For view ops this kernel does `as_view` setup where we properly setup</span></span><br><span class="line"><span class="comment">//    DifferentiableViewMeta on the view tensors.</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>AD</strong> &#x3D; <strong>Autograd</strong>，<strong>Inplace</strong> &#x3D; 原地修改操作，<strong>View</strong> &#x3D; 视图操作。</p>
+<h3 id="这个-key-在哪里注册？"><a href="#这个-key-在哪里注册？" class="headerlink" title="这个 key 在哪里注册？"></a>这个 key 在哪里注册？</h3><p><a href="c10/core/DispatchKeySet.h#L674-L677">c10&#x2F;core&#x2F;DispatchKeySet.h:674-677</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 默认 included set 包含 ADInplaceOrView</span></span><br><span class="line"><span class="keyword">constexpr</span> DispatchKeySet default_included_set = <span class="built_in">DispatchKeySet</span>(&#123;</span><br><span class="line">    DispatchKey::BackendSelect,</span><br><span class="line">    DispatchKey::ADInplaceOrView,</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p><a href="c10/core/DispatchKeySet.h#L692-L693">c10&#x2F;core&#x2F;DispatchKeySet.h:692-693</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 与 autograd 一起使用</span></span><br><span class="line"><span class="keyword">constexpr</span> DispatchKeySet autograd_dispatch_keyset_with_ADInplaceOrView =</span><br><span class="line">    autograd_dispatch_keyset | <span class="built_in">DispatchKeySet</span>(DispatchKey::ADInplaceOrView);</span><br></pre></td></tr></table></figure>
+
+<h3 id="如何检查一个张量是否是推理张量"><a href="#如何检查一个张量是否是推理张量" class="headerlink" title="如何检查一个张量是否是推理张量"></a>如何检查一个张量是否是推理张量</h3><p><a href="c10/core/TensorImpl.h#L1271-L1281">c10&#x2F;core&#x2F;TensorImpl.h:1271-1281</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">is_inference</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="type">bool</span> no_ADInplaceOrView = !key_set_.<span class="built_in">has_any</span>(c10::inplace_or_view_ks);</span><br><span class="line">  <span class="type">bool</span> no_Autograd = !key_set_.<span class="built_in">has_any</span>(c10::autograd_dispatch_keyset);</span><br><span class="line">  <span class="comment">// 验证：ADInplaceOrView 和 Autograd 必须同时开关</span></span><br><span class="line">  <span class="built_in">TORCH_INTERNAL_ASSERT_DEBUG_ONLY</span>(</span><br><span class="line">      no_ADInplaceOrView == no_Autograd,</span><br><span class="line">      <span class="string">&quot;ADInplaceOrView and Autograd keys must be on/off at the same time.&quot;</span>);</span><br><span class="line">  <span class="keyword">return</span> no_ADInplaceOrView &amp;&amp; no_Autograd;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="DispatchKey-优先级体系"><a href="#DispatchKey-优先级体系" class="headerlink" title="DispatchKey 优先级体系"></a>DispatchKey 优先级体系</h3><p>PyTorch 的 dispatch 是<strong>基于优先级的查找</strong>：调度时按 enum 顺序从高到低查找，直到找到注册的 kernel。</p>
+<p><a href="c10/core/DispatchKey.h#L269-L344">c10&#x2F;core&#x2F;DispatchKey.h:269-344</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 优先级从高到低（enum 值越大优先级越高）</span></span><br><span class="line">ADInplaceOrView,       <span class="comment">// 304 - 功能性 key</span></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">AutogradOther,         <span class="comment">// 330 - autograd key</span></span><br><span class="line">AutogradFunctionality, <span class="comment">// 333</span></span><br><span class="line">AutogradNestedTensor,  <span class="comment">// 342</span></span><br><span class="line">Tracer,               <span class="comment">// 344</span></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">PythonTLSSnapshot,    <span class="comment">// 392</span></span><br><span class="line">FuncTorchDynamicLayerFrontMode, <span class="comment">// 395</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>ADInplaceOrView 的位置</strong>：位于功能性 key 和 autograd key 之间。</p>
+<h3 id="Dispatch-查找流程"><a href="#Dispatch-查找流程" class="headerlink" title="Dispatch 查找流程"></a>Dispatch 查找流程</h3><p>当调用 <code>tensor.add_(1)</code> 时：</p>
+<ol>
+<li><strong>提取 keyset</strong>：从 tensor 提取所有 dispatch keys（可能包含 ADInplaceOrView）</li>
+<li><strong>找最高优先级 key</strong>：<code>highestPriorityTypeId()</code> 选出 enum 值最高的 key</li>
+<li><strong>查表</strong>：在操作符的 dispatch table 中查找对应 kernel</li>
+</ol>
+<h3 id="Fallthrough-机制"><a href="#Fallthrough-机制" class="headerlink" title="Fallthrough 机制"></a>Fallthrough 机制</h3><p>大多数操作<strong>不注册</strong> ADInplaceOrView 的特定 kernel，此时会”穿透”到下一个 key：</p>
+<p><a href="aten/src/ATen/core/VariableFallbackKernel.cpp#L102-L105">aten&#x2F;src&#x2F;ATen&#x2F;core&#x2F;VariableFallbackKernel.cpp:102-105</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 默认所有 ops 对 ADInplaceOrView 都是 fallthrough</span></span><br><span class="line"><span class="built_in">TORCH_LIBRARY_IMPL</span>(_, ADInplaceOrView, m) &#123;</span><br><span class="line">  m.<span class="built_in">fallback</span>(torch::CppFunction::<span class="built_in">makeFallthrough</span>());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>只有 inplace&#x2F;view ops 注册特定 kernel</strong>：</p>
+<ul>
+<li><strong>Inplace ops</strong>（如 <code>add_</code>）：注册 kernel 做 <code>version bump</code></li>
+<li><strong>View ops</strong>（如 <code>view</code>）：注册 kernel 做 <code>DifferentiableViewMeta</code> setup</li>
+<li><strong>其他 ops</strong>：默认 fallthrough，穿透到 Autograd 或 backend</li>
+</ul>
+<h3 id="为什么-InferenceMode-要移除-ADInplaceOrView？"><a href="#为什么-InferenceMode-要移除-ADInplaceOrView？" class="headerlink" title="为什么 InferenceMode 要移除 ADInplaceOrView？"></a>为什么 InferenceMode 要移除 ADInplaceOrView？</h3><p>移除后，推理张量的 keyset 中<strong>没有 ADInplaceOrView</strong>，dispatch 时会跳过这个 key。</p>
+<p>但更重要的是：InferenceMode 同时把 <strong>autograd keys 加到了 excluded set</strong>：</p>
+<p><a href="c10/core/InferenceMode.h#L64-L66">c10&#x2F;core&#x2F;InferenceMode.h:64-66</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">DispatchKeySet excluded = enabled</span><br><span class="line">    ? (prev_keyset.excluded_ | c10::autograd_dispatch_keyset)  <span class="comment">// 排除 autograd</span></span><br><span class="line">    : prev_keyset.excluded_;</span><br></pre></td></tr></table></figure>
+
+<p>所以 dispatch 查找时：</p>
+<ol>
+<li>ADInplaceOrView 不在 included set → 被跳过</li>
+<li>Autograd keys 在 excluded set → 被排除</li>
+<li>最终查到 <strong>Backend fallback</strong>（如 CPU、CUDA）</li>
+</ol>
+<p>但因为推理张量本来就不需要 autograd，所以：</p>
+<ul>
+<li>跳过 ADInplaceOrView → 不做 version bump → 节省原子操作</li>
+<li>跳过 ADInplaceOrView → 不做 view setup → 节省元数据</li>
+</ul>
+<h3 id="InferenceMode-的工作原理"><a href="#InferenceMode-的工作原理" class="headerlink" title="InferenceMode 的工作原理"></a>InferenceMode 的工作原理</h3><p><a href="c10/core/InferenceMode.h#L54-L90">c10&#x2F;core&#x2F;InferenceMode.h:54-90</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">C10_API</span> InferenceMode &#123;</span><br><span class="line">  <span class="built_in">InferenceMode</span>(<span class="type">bool</span> enabled = <span class="literal">true</span>)</span><br><span class="line">      : <span class="built_in">prev_mode</span>(AutogradState::<span class="built_in">get_tls_state</span>()),</span><br><span class="line">        <span class="built_in">prev_keyset</span>(c10::impl::<span class="built_in">tls_local_dispatch_key_set</span>()) &#123;</span><br><span class="line">    <span class="comment">// 启用推理模式 = 禁用 grad 模式</span></span><br><span class="line">    AutogradState::<span class="built_in">set_tls_state</span>(<span class="built_in">AutogradState</span>(</span><br><span class="line">        <span class="comment">/* grad_mode */</span> !enabled,</span><br><span class="line">        <span class="comment">/* inference_mode */</span> enabled,</span><br><span class="line">        <span class="comment">/* fw_grad_mode */</span> !enabled));</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 关键：从 dispatch keyset 中移除 ADInplaceOrView</span></span><br><span class="line">    DispatchKeySet included = enabled</span><br><span class="line">        ? prev_keyset.included_.<span class="built_in">remove</span>(c10::DispatchKey::ADInplaceOrView)</span><br><span class="line">        : prev_keyset.included_.<span class="built_in">add</span>(c10::DispatchKey::ADInplaceOrView);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="推理张量的两个关键特性"><a href="#推理张量的两个关键特性" class="headerlink" title="推理张量的两个关键特性"></a>推理张量的两个关键特性</h3><p><a href="c10/core/TensorImpl.h#L110-L117">TensorImpl.h:110-117</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 推理张量不分配版本计数器</span></span><br><span class="line"><span class="keyword">if</span> (!<span class="built_in">is_inference</span>()) &#123;</span><br><span class="line">  version_counter_ = <span class="built_in">VariableVersion</span>(<span class="comment">/*version=*/</span><span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><a href="c10/core/TensorImpl.h#L1274-L1280">TensorImpl.h:1274-1280</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 推理张量的标志：没有 ADInplaceOrView 和 autograd dispatch keys</span></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">is_inference</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="type">bool</span> no_ADInplaceOrView = !key_set_.<span class="built_in">has_any</span>(c10::inplace_or_view_ks);</span><br><span class="line">  <span class="type">bool</span> no_Autograd = !key_set_.<span class="built_in">has_any</span>(c10::autograd_dispatch_keyset);</span><br><span class="line">  <span class="keyword">return</span> no_ADInplaceOrView &amp;&amp; no_Autograd;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="对比：推理张量-vs-普通张量"><a href="#对比：推理张量-vs-普通张量" class="headerlink" title="对比：推理张量 vs 普通张量"></a>对比：推理张量 vs 普通张量</h3><table>
+<thead>
+<tr>
+<th>属性</th>
+<th>普通张量</th>
+<th>推理张量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>版本计数器</td>
+<td>启用（atomic uint32）</td>
+<td>禁用（nullptr）</td>
+</tr>
+<tr>
+<td>ADInplaceOrView key</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>原地修改追踪</td>
+<td>是</td>
+<td>否</td>
+</tr>
+<tr>
+<td>可保存用于反向传播</td>
+<td>是</td>
+<td>否（编译时报错）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="视图追踪：”梯度感染”问题"><a href="#视图追踪：”梯度感染”问题" class="headerlink" title="视图追踪：”梯度感染”问题"></a>视图追踪：”梯度感染”问题</h2><h3 id="视图追踪的场景"><a href="#视图追踪的场景" class="headerlink" title="视图追踪的场景"></a>视图追踪的场景</h3><p>如果基础张量 A 不需要梯度，但视图 B 被需要梯度的张量 C 原地修改——“梯度需求”会通过视图”感染”到基础张量 A。</p>
+<h3 id="CreationMeta-机制"><a href="#CreationMeta-机制" class="headerlink" title="CreationMeta 机制"></a>CreationMeta 机制</h3><p><a href="torch/csrc/autograd/variable.h#L690-L714">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.h:690-714</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum class</span> <span class="title class_">CreationMeta</span> : <span class="type">uint8_t</span> &#123;</span><br><span class="line">  DEFAULT,</span><br><span class="line">  IN_CUSTOM_FUNCTION,</span><br><span class="line">  MULTI_OUTPUT_NODE,</span><br><span class="line">  NO_GRAD_MODE,</span><br><span class="line">  INFERENCE_MODE  <span class="comment">// 最严格的模式</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 传播规则</span></span><br><span class="line"><span class="function"><span class="keyword">inline</span> CreationMeta <span class="title">propagate_creation_meta</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    CreationMeta prev_view_creation_meta,</span></span></span><br><span class="line"><span class="params"><span class="function">    CreationMeta new_view_creation_meta)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> (new_view_creation_meta == CreationMeta::DEFAULT)</span><br><span class="line">      ? prev_view_creation_meta</span><br><span class="line">      : (prev_view_creation_meta == CreationMeta::INFERENCE_MODE</span><br><span class="line">             ? prev_view_creation_meta  <span class="comment">// 保持 INFERENCE_MODE</span></span><br><span class="line">             : new_view_creation_meta);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>推理模式下创建的视图标记为 <code>INFERENCE_MODE</code>，这个标记会传播，且无法被”降级”。</p>
+<hr>
+<h2 id="安全检查：两层保护"><a href="#安全检查：两层保护" class="headerlink" title="安全检查：两层保护"></a>安全检查：两层保护</h2><h3 id="第一层：禁止保存推理张量"><a href="#第一层：禁止保存推理张量" class="headerlink" title="第一层：禁止保存推理张量"></a>第一层：禁止保存推理张量</h3><p><a href="torch/csrc/autograd/saved_variable.cpp#L40-L46">torch&#x2F;csrc&#x2F;autograd&#x2F;saved_variable.cpp:40-46</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Note [Inference tensor cannot be saved for backward]</span></span><br><span class="line"><span class="built_in">TORCH_CHECK</span>(</span><br><span class="line">    !variable.<span class="built_in">is_inference</span>(),</span><br><span class="line">    <span class="string">&quot;Inference tensors cannot be saved for backward. Please do not use &quot;</span></span><br><span class="line">    <span class="string">&quot;Tensors created in inference mode in computation tracked by autograd.&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>如果试图将推理张量保存用于反向传播，<strong>立刻报错</strong>。</p>
+<h3 id="第二层：禁止跨模式原地修改"><a href="#第二层：禁止跨模式原地修改" class="headerlink" title="第二层：禁止跨模式原地修改"></a>第二层：禁止跨模式原地修改</h3><p><a href="torch/csrc/autograd/variable.cpp#L796-L802">torch&#x2F;csrc&#x2F;autograd&#x2F;variable.cpp:796-802</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (creation_meta == CreationMeta::INFERENCE_MODE) &#123;</span><br><span class="line">  msg = c10::<span class="built_in">str</span>(</span><br><span class="line">      prefix,</span><br><span class="line">      <span class="string">&quot; inference mode and &quot;</span>,</span><br><span class="line">      modified_obj,</span><br><span class="line">      <span class="string">&quot; modified inplace in normal mode.&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在推理模式下创建的视图，如果在推理模式外被需要梯度的张量原地修改，<strong>立刻报错</strong>。</p>
+<h3 id="错误示例"><a href="#错误示例" class="headerlink" title="错误示例"></a>错误示例</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">x = torch.zeros(<span class="number">2</span>)</span><br><span class="line"><span class="keyword">with</span> torch.inference_mode():</span><br><span class="line">    y = x.view(<span class="number">2</span>)  <span class="comment"># y 标记为 INFERENCE_MODE</span></span><br><span class="line"></span><br><span class="line">y.requires_grad_(<span class="literal">True</span>)</span><br><span class="line">z = y.view(<span class="number">2</span>)</span><br><span class="line">z /= <span class="number">2</span>  <span class="comment"># 报错：a view of a view is being modified inside the inference_mode</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="Python-API"><a href="#Python-API" class="headerlink" title="Python API"></a>Python API</h2><p><a href="torch/autograd/grad_mode.py#L212-L260">torch&#x2F;autograd&#x2F;grad_mode.py:212-260</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">inference_mode</span>(<span class="title class_ inherited__">_DecoratorContextManager</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, mode: <span class="built_in">bool</span> = <span class="literal">True</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        self.mode = mode</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__enter__</span>(<span class="params">self</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        self._inference_mode_context = torch._C._InferenceMode(self.mode)</span><br><span class="line">        self._inference_mode_context.__enter__()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__exit__</span>(<span class="params">self, exc_type, exc_value, traceback</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        self._inference_mode_context.__exit__(exc_type, exc_value, traceback)</span><br></pre></td></tr></table></figure>
+
+<p>使用方式：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">with</span> torch.inference_mode():</span><br><span class="line">    <span class="comment"># 所有在此创建的张量都是推理张量</span></span><br><span class="line">    result = model(<span class="built_in">input</span>)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>推理模式通过三层机制实现”更快+更安全”：</p>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>效果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>移除 ADInplaceOrView key</strong></td>
+<td>跳过 autograd dispatch</td>
+</tr>
+<tr>
+<td><strong>禁用版本计数器</strong></td>
+<td>节省内存，避免原子操作开销</td>
+</tr>
+<tr>
+<td><strong>CreationMeta 追踪</strong></td>
+<td>检测”梯度感染”场景</td>
+</tr>
+</tbody></table>
+<p>两层安全检查：</p>
+<table>
+<thead>
+<tr>
+<th>检查</th>
+<th>触发条件</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SavedVariable guard</td>
+<td>尝试保存推理张量</td>
+<td>立刻报错</td>
+</tr>
+<tr>
+<td>跨模式修改检测</td>
+<td>推理视图在模式外被修改</td>
+<td>立刻报错</td>
+</tr>
+</tbody></table>
+<p>推理模式不是盲目相信用户承诺，而是通过编译器和运行时的严格检查，确保任何违规行为都会被及时发现。</p>
+
+    </div>
+    
+    <div class="post__license">
+        <p>
+            <strong>本文作者：</strong>hans
+        </p>
+        <p>
+            <strong>
+                本文链接：
+            </strong>
+            <a href="http://example.com/2026/05/24/publish_5.pytorch-inference-mode/">http://example.com/2026/05/24/publish_5.pytorch-inference-mode/</a>
+        </p>
+        
+            <strong>
+                <p>文章默认使用 <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh">CC BY-NC-SA 4.0</a> 协议进行许可，使用时请注意遵守协议。</p>
+
+            </strong>
+        
+    </div>
+ 
+    <div class="post-footer__meta"><p>更新于 2026-05-24</p></div> 
+    <div class="post-entry__tags"><a href="/tags/pytorch/" class="post-tags__link button"># pytorch</a><a href="/tags/PyTorch%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" class="post-tags__link button"># PyTorch源码分析</a></div> 
+</article>
+
+
+    <div class="nav">
+        <div class="nav__prev">
+            
+                <a href="/2026/05/24/publish_2.pytorch-dispatcher-history/" class="nav__link">
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
+                    </div>
+                    <div>
+                        <div class="nav__label">
+                            上一篇
+                        </div>
+                        <div class="nav__title">
+                            pytorch dispatcher history
+                        </div>
+                    </div>
+                </a>
+            
+        </div>
+        <div class="nav__next">
+            
+                <a href="/2026/05/24/publish_6.1.pytorch-distributed-training/" class="nav__link">
+                    <div>
+                        <div class="nav__label">
+                            下一篇
+                        </div>
+                        <div class="nav__title">
+                            1.pytorch distributed training
+                        </div>
+                    </div>
+                    <div>
+                        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M434.944 790.624l-45.248-45.248L623.04 512l-233.376-233.376 45.248-45.248L713.568 512z" fill="#808080"></path></svg>
+                    </div>
+                </a>
+            
+        </div>
+    </div>
+
+
+
+    <div class="post__comments post__with-toc content-card" id="comment">
+        
+    <h4>评论</h4>
+    
+    
+    
+    
+    
+    
+    <div id="gitalk-container"></div>
+
+    
+    
+    
+    
+    
+    
+
+
+    </div>
+
+
+
+</main>
+
+            <footer class="footer">
+     
+    <a href="#" class="button" id="b2t" aria-label="回到顶部" title="回到顶部">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="32" height="32">
+            <path d="M233.376 722.752L278.624 768 512 534.624 745.376 768l45.248-45.248L512 444.128zM192 352h640V288H192z" fill="currentColor"></path>
+        </svg>
+    </a>
+
+    
+
+
+    
+     
+ 
+
+ 
+    
+        
+        <p class="footer-copyright">
+            Copyright © 2026 <a href="/">此间闲笔</a>
+        </p>
+    
+    
+    <p>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> | Theme - <a href="https://github.com/ChrAlpha/hexo-theme-cards" target="_blank">Cards</a></p>
+</footer>
+
+        </div>
+        
+    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@17.1.0/dist/lazyload.min.js"></script>
+    <script>
+        window.lazyLoadOptions = {
+            elements_selector: ".lazy",
+            threshold: 0
+        };
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+    
+ 
+
+
+    
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
+
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.css">
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@3.4.1/dist/jquery.fancybox.min.js"></script>
+
+    <script>
+        let lazyloadT = Boolean('true'),
+            auto_fancybox = Boolean('false')
+        if (auto_fancybox) {
+            $(".post__content").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        } else {
+            $(".post__content").find("fancybox").find('img').each(function () {
+                var element = document.createElement("a");
+                $(element).attr("data-fancybox", "gallery");
+                $(element).attr("href", $(this).attr("src"));
+                if (lazyloadT) {
+                    $(element).attr("href", $(this).attr("data-srcset"));
+                }
+                $(this).wrap(element);
+            });
+        }
+    </script>
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+    
+
+    
+
+    
+    
+
+    
+    
+    
+    <script>
+        function loadComment() {
+            let e, i;
+            (e = document.createElement("script")).src = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js',
+            document.body.appendChild(e);
+            e.onload = () => {
+                var gitalk = new Gitalk({
+                    clientID: 'c27ca5475f9fbc9c3314',
+                    clientSecret: '1b2b465823360b09e496640d2da3a3b9f050ae09',
+                    repo: 'qinhankafka.github.io',
+                    owner: 'qinhankafka',
+                    admin: 'qinhankafka',
+                    id: window.location.pathname,
+                    distractionFreeMode: false
+                });
+                gitalk.render('gitalk-container');
+            };
+            (i = document.createElement("link")).rel = "stylesheet",
+            i.href = 'https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css',
+            document.head.appendChild(i);
+        }
+    
+        var runningOnBrowser = typeof window !== "undefined";
+        var isBot = runningOnBrowser && !("onscroll" in window) || typeof navigator !== "undefined" && /(gle|ing|ro|msn)bot|crawl|spider|yand|duckgo/i.test(navigator.userAgent);
+        var supportsIntersectionObserver = runningOnBrowser && "IntersectionObserver" in window;
+    
+        setTimeout(function () {
+            if (!isBot && supportsIntersectionObserver) {
+                var comment_observer = new IntersectionObserver(function(entries) {
+                    if (entries[0].isIntersecting) {
+                        loadComment();
+                        comment_observer.disconnect();
+                    }
+                }, { threshold: [0] });
+                comment_observer.observe(document.getElementById('comment'));
+            } else {
+                loadComment();
+            }
+        }, 1);
+    </script>
+
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
+    
+
+
+
+    </body>
+</html>
