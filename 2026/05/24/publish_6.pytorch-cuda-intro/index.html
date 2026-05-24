@@ -35,7 +35,7 @@
     <!-- meta -->
 
 
-<title>pytorch cuda intro | 此间闲笔</title>
+<title>6. PyTorch CUDA 入门：异步执行与性能优化 | 此间闲笔</title>
 
 
     <meta name="keywords" content="pytorch, PyTorch源码分析">
@@ -47,13 +47,13 @@
  
     <meta name="description" content="PyTorch CUDA 入门：异步执行与性能优化引言：GPU 与 CUDA 概览深度学习的成功离不开 GPU 的并行计算能力。理解 CUDA 编程模型，特别是异步执行机制，对编写高效、易调试的 PyTorch 代码至关重要。 CPU vs GPU：核心设计差异   特性 CPU GPU    核心数 少数几个强大核心（32~64） 成千上万个简单核心   设计目标 复杂逻辑、顺序执行 大量简单并">
 <meta property="og:type" content="article">
-<meta property="og:title" content="pytorch cuda intro">
+<meta property="og:title" content="6. PyTorch CUDA 入门：异步执行与性能优化">
 <meta property="og:url" content="http://example.com/2026/05/24/publish_6.pytorch-cuda-intro/index.html">
 <meta property="og:site_name" content="此间闲笔">
 <meta property="og:description" content="PyTorch CUDA 入门：异步执行与性能优化引言：GPU 与 CUDA 概览深度学习的成功离不开 GPU 的并行计算能力。理解 CUDA 编程模型，特别是异步执行机制，对编写高效、易调试的 PyTorch 代码至关重要。 CPU vs GPU：核心设计差异   特性 CPU GPU    核心数 少数几个强大核心（32~64） 成千上万个简单核心   设计目标 复杂逻辑、顺序执行 大量简单并">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
-<meta property="article:modified_time" content="2026-05-24T08:28:01.200Z">
+<meta property="article:modified_time" content="2026-05-24T08:34:31.114Z">
 <meta property="article:author" content="hans">
 <meta property="article:tag" content="pytorch">
 <meta property="article:tag" content="PyTorch源码分析">
@@ -153,7 +153,7 @@
 
 <div class="post-title">
     <h1 class="post-title__text">
-        pytorch cuda intro
+        6. PyTorch CUDA 入门：异步执行与性能优化
     </h1>
     <div class="post-title__meta">
         <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
@@ -385,7 +385,7 @@
     <div class="nav">
         <div class="nav__prev">
             
-                <a href="/2026/05/24/publish_4.pytorch-cpu-vectorization/" class="nav__link">
+                <a href="/2026/05/24/publish_6.1.pytorch-distributed-training/" class="nav__link">
                     <div>
                         <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M589.088 790.624L310.464 512l278.624-278.624 45.248 45.248L400.96 512l233.376 233.376z" fill="#808080"></path></svg>
                     </div>
@@ -394,7 +394,7 @@
                             上一篇
                         </div>
                         <div class="nav__title">
-                            pytorch cpu vectorization
+                            6.1. PyTorch CUDA 入门（扩展）：分布式训练与推理
                         </div>
                     </div>
                 </a>
@@ -402,13 +402,13 @@
         </div>
         <div class="nav__next">
             
-                <a href="/2026/05/24/publish_8.pytorch-structured-kernel-meta-tensor/" class="nav__link">
+                <a href="/2026/05/24/publish_7.pytorch-functionalization/" class="nav__link">
                     <div>
                         <div class="nav__label">
                             下一篇
                         </div>
                         <div class="nav__title">
-                            pytorch structured kernel meta tensor
+                            7. PyTorch 函数化（Functionalization）：去除原地修改的艺术
                         </div>
                     </div>
                     <div>

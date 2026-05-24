@@ -35,7 +35,7 @@
     <!-- meta -->
 
 
-<title>1.pytorch distributed training | 此间闲笔</title>
+<title>6.1. PyTorch CUDA 入门（扩展）：分布式训练与推理 | 此间闲笔</title>
 
 
     <meta name="keywords" content="pytorch, PyTorch源码分析">
@@ -47,13 +47,13 @@
  
     <meta name="description" content="PyTorch CUDA 入门（扩展）：分布式训练与推理引言：从单 GPU 到多 GPU 集群现代大模型需要大量 GPU 同时运行。假设我们有2 台服务器，每台 4 GPU——共 8 个 GPU，需要协调工作。 PyTorch 通过 torch.distributed 支持多节点分布式训练和推理。  分布式核心概念进程组模型每个 GPU 对应一个进程，这些进程组织成进程组：    概念 说明">
 <meta property="og:type" content="article">
-<meta property="og:title" content="1.pytorch distributed training">
+<meta property="og:title" content="6.1. PyTorch CUDA 入门（扩展）：分布式训练与推理">
 <meta property="og:url" content="http://example.com/2026/05/24/publish_6.1.pytorch-distributed-training/index.html">
 <meta property="og:site_name" content="此间闲笔">
 <meta property="og:description" content="PyTorch CUDA 入门（扩展）：分布式训练与推理引言：从单 GPU 到多 GPU 集群现代大模型需要大量 GPU 同时运行。假设我们有2 台服务器，每台 4 GPU——共 8 个 GPU，需要协调工作。 PyTorch 通过 torch.distributed 支持多节点分布式训练和推理。  分布式核心概念进程组模型每个 GPU 对应一个进程，这些进程组织成进程组：    概念 说明">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
-<meta property="article:modified_time" content="2026-05-24T08:28:01.196Z">
+<meta property="article:modified_time" content="2026-05-24T08:34:31.115Z">
 <meta property="article:author" content="hans">
 <meta property="article:tag" content="pytorch">
 <meta property="article:tag" content="PyTorch源码分析">
@@ -153,7 +153,7 @@
 
 <div class="post-title">
     <h1 class="post-title__text">
-        1.pytorch distributed training
+        6.1. PyTorch CUDA 入门（扩展）：分布式训练与推理
     </h1>
     <div class="post-title__meta">
         <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
@@ -511,7 +511,7 @@
                             上一篇
                         </div>
                         <div class="nav__title">
-                            pytorch inference mode
+                            5. PyTorch 推理模式（Inference Mode）深度解析
                         </div>
                     </div>
                 </a>
@@ -519,13 +519,13 @@
         </div>
         <div class="nav__next">
             
-                <a href="/2026/05/24/publish_3.pytorch-library-structure/" class="nav__link">
+                <a href="/2026/05/24/publish_6.pytorch-cuda-intro/" class="nav__link">
                     <div>
                         <div class="nav__label">
                             下一篇
                         </div>
                         <div class="nav__title">
-                            pytorch library structure
+                            6. PyTorch CUDA 入门：异步执行与性能优化
                         </div>
                     </div>
                     <div>

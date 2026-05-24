@@ -35,7 +35,7 @@
     <!-- meta -->
 
 
-<title>placement new | 此间闲笔</title>
+<title>Placement New：只在指定地址构造对象 | 此间闲笔</title>
 
 
     <meta name="keywords" content="pytorch, PyTorch源码分析">
@@ -47,13 +47,13 @@
  
     <meta name="description" content="Placement New：只在指定地址构造对象普通的 new 和 delete在 C++ 中，我们通常这样使用 new 和 delete： 12345&#x2F;&#x2F; 分配内存 + 调用构造函数MyClass* p &#x3D; new MyClass(args);&#x2F;&#x2F; 调用析构函数 + 释放内存delete p;  new 运算符做了两件事：  分配内存——从堆上获取一块足够大的空间 构造对象——在这块内存上调用构">
 <meta property="og:type" content="article">
-<meta property="og:title" content="placement new">
+<meta property="og:title" content="Placement New：只在指定地址构造对象">
 <meta property="og:url" content="http://example.com/2026/05/24/publish_placement-new/index.html">
 <meta property="og:site_name" content="此间闲笔">
 <meta property="og:description" content="Placement New：只在指定地址构造对象普通的 new 和 delete在 C++ 中，我们通常这样使用 new 和 delete： 12345&#x2F;&#x2F; 分配内存 + 调用构造函数MyClass* p &#x3D; new MyClass(args);&#x2F;&#x2F; 调用析构函数 + 释放内存delete p;  new 运算符做了两件事：  分配内存——从堆上获取一块足够大的空间 构造对象——在这块内存上调用构">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2026-05-24T08:27:56.000Z">
-<meta property="article:modified_time" content="2026-05-24T08:28:01.215Z">
+<meta property="article:modified_time" content="2026-05-24T08:34:31.118Z">
 <meta property="article:author" content="hans">
 <meta property="article:tag" content="pytorch">
 <meta property="article:tag" content="PyTorch源码分析">
@@ -153,7 +153,7 @@
 
 <div class="post-title">
     <h1 class="post-title__text">
-        placement new
+        Placement New：只在指定地址构造对象
     </h1>
     <div class="post-title__meta">
         <a href="/archives/2026/05/" class="post-meta__date button">2026-05-24</a>
@@ -322,7 +322,7 @@
                             上一篇
                         </div>
                         <div class="nav__title">
-                            pytorch backend extensibility
+                            9. 深入探索PyTorch的后端可扩展性：从CUDA到XLA的演进之路
                         </div>
                     </div>
                 </a>
@@ -330,13 +330,13 @@
         </div>
         <div class="nav__next">
             
-                <a href="/2026/05/08/%E7%8C%AE%E7%BB%99%E9%98%BF%E5%B0%94%E5%90%89%E4%BE%AC%E7%9A%84%E8%8A%B1%E6%9D%9F-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/" class="nav__link">
+                <a href="/2026/05/24/publish_3.pytorch-library-structure/" class="nav__link">
                     <div>
                         <div class="nav__label">
                             下一篇
                         </div>
                         <div class="nav__title">
-                            《献给阿尔吉侬的花束》—— 关于记忆、智慧与那些抓不住的风
+                            3. PyTorch 内部库结构：为什么需要这么多动态库？
                         </div>
                     </div>
                     <div>
